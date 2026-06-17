@@ -1,15 +1,17 @@
 # @redline/extension
 
-Chromium MV3 extension to leave right-click comments on a local frontend.
+Chromium MV3 extension to leave comments on any frontend.
 
 ## What it does
 
-- Adds an "Add Claude comment" entry to the right-click menu on `localhost`.
+- Activates per tab from the toolbar icon, then overlays a draggable toolbar; you
+  click any element to comment, recolor, or edit its copy.
 - Renders a pin and a composer (in a shadow DOM, isolated from page styles).
 - Captures the element fingerprint (selector, text, computed styles, rect) and,
   when present, a build-time source location from an inspector plugin.
-- Queues comments in `chrome.storage` and posts them to the MCP server's
-  localhost listener, draining automatically when Claude Code is running.
+- On `localhost`, posts comments to the project's MCP server (choosing the most
+  recently started one) so they save into the repo as you go. On a remote page it
+  keeps them in `chrome.storage` for **Handoff** export and never calls loopback.
 
 ## Source location (the gold path)
 

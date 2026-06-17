@@ -1,0 +1,27 @@
+{
+  "name": "redline",
+  "owner": {
+    "name": "pallandir",
+    "url": "https://github.com/pallandir"
+  },
+  "metadata": {
+    "description": "Leave UI comments in the browser and let your AI assistant turn them into approved code changes.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "redline",
+      "source": "./plugin",
+      "description": "Pick up UI comments left through the Redline browser extension and turn them into planned, approved code changes. Bundles the comments skill and the redline MCP server (run via npx).",
+      "version": "1.0.0",
+      "author": {
+        "name": "pallandir",
+        "url": "https://github.com/pallandir"
+      },
+      "homepage": "https://github.com/pallandir/redline",
+      "license": "PolyForm-Noncommercial-1.0.0",
+      "keywords": ["ui", "design-review", "frontend", "mcp", "comments"],
+      "category": "design"
+    }
+  ]
+}

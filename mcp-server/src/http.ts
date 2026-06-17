@@ -1,12 +1,15 @@
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
+import { Broker } from "./broker.js";
 import type { CommentStore } from "./store.js";
 import { parseIncoming } from "./validate.js";
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const SERVICE = "redline";
+const WAIT_TIMEOUT_MS = 25_000;
 
 export interface IngestServer {
   port: number;
+  broker: Broker;
   close: () => Promise<void>;
 }
 
@@ -14,14 +17,18 @@ export async function startIngestServer(
   store: CommentStore,
   preferredPorts: number[],
   log: (msg: string) => void,
+  broker: Broker = new Broker(),
 ): Promise<IngestServer> {
   const server = createServer((req, res) => {
     const port = (server.address() as { port: number } | null)?.port ?? 0;
-    void handle(req, res, store, log, port);
+    handle(req, res, store, log, port, broker).catch(() => {
+      if (!res.headersSent) json(res, 500, { error: "internal" });
+    });
   });
   const port = await listenFirstAvailable(server, preferredPorts);
   return {
     port,
+    broker,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
 }
@@ -59,6 +66,7 @@ async function handle(
   store: CommentStore,
   log: (msg: string) => void,
   port: number,
+  broker: Broker,
 ): Promise<void> {
   const origin = req.headers.origin;
   setCors(res, origin);
@@ -74,7 +82,58 @@ async function handle(
   }
 
   if (req.method === "GET" && req.url === "/health") {
-    json(res, 200, { ok: true, service: SERVICE });
+    json(res, 200, {
+      ok: true,
+      service: SERVICE,
+      root: store.root,
+      startedAt: broker.startedAt,
+      pid: broker.pid,
+      version: broker.currentVersion,
+      lastPolledAt: broker.lastPolledAt,
+      lease: await store.getLease(),
+    });
+    return;
+  }
+
+  if (req.method === "GET" && req.url?.startsWith("/state")) {
+    json(res, 200, await snapshot(store, broker));
+    return;
+  }
+
+  if (req.method === "GET" && req.url?.startsWith("/wait")) {
+    const raw = query(req.url, "since");
+    const since = raw === null ? broker.currentVersion : Number(raw);
+    const base = Number.isFinite(since) ? since : broker.currentVersion;
+    await broker.wait(base, WAIT_TIMEOUT_MS);
+    json(res, 200, await snapshot(store, broker));
+    return;
+  }
+
+  if (req.method === "GET" && req.url === "/plan") {
+    json(res, 200, (await store.getPlan()) ?? null);
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/plan/decision") {
+    try {
+      const body = await readBody(req);
+      const parsed = JSON.parse(body) as { id?: string; decision?: string };
+      const status = decisionToStatus(parsed.decision);
+      if (!parsed.id || !status) {
+        json(res, 400, { error: "id and decision (approve|reject) required" });
+        return;
+      }
+      const plan = await store.decidePlan(parsed.id, status);
+      if (!plan) {
+        json(res, 404, { error: "no matching plan" });
+        return;
+      }
+      broker.bump();
+      log(`plan ${plan.id} ${status}`);
+      json(res, 200, plan);
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
     return;
   }
 
@@ -84,8 +143,9 @@ async function handle(
   }
 
   if (req.method === "DELETE" && req.url?.startsWith("/comments")) {
-    const url = new URL(req.url, "http://localhost").searchParams.get("url") ?? undefined;
+    const url = query(req.url, "url") ?? undefined;
     const removed = await store.clear(url);
+    broker.bump();
     log(`cleared ${removed} comment(s)${url ? ` on ${url}` : ""}`);
     json(res, 200, { removed });
     return;
@@ -96,6 +156,7 @@ async function handle(
       const body = await readBody(req);
       const incoming = parseIncoming(body);
       const comment = await store.add(incoming);
+      broker.bump();
       log(`ingested comment ${comment.id} on ${comment.route}`);
       json(res, 201, { id: comment.id, status: comment.status });
     } catch (err) {
@@ -105,6 +166,27 @@ async function handle(
   }
 
   json(res, 404, { error: "not found" });
+}
+
+function decisionToStatus(decision: string | undefined): "approved" | "rejected" | null {
+  switch (decision) {
+    case "approve":
+      return "approved";
+    case "reject":
+      return "rejected";
+    default:
+      return null;
+  }
+}
+
+async function snapshot(store: CommentStore, broker: Broker) {
+  return {
+    version: broker.currentVersion,
+    lastPolledAt: broker.lastPolledAt,
+    comments: await store.list(),
+    plan: await store.getPlan(),
+    lease: await store.getLease(),
+  };
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -123,6 +205,10 @@ function readBody(req: IncomingMessage): Promise<string> {
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", reject);
   });
+}
+
+function query(url: string, key: string): string | null {
+  return new URL(url, "http://localhost").searchParams.get(key);
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {

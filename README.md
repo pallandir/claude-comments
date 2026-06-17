@@ -21,32 +21,35 @@
 ## TL;DR
 
 Redline ships three pieces: a **browser extension**, an **MCP server**, and a
-**/comments skill**. Build everything, then wire it into your AI coding
-assistant (the example below uses Claude Code, the tested path):
+**/comments skill**. The MCP server and skill install together as a Claude Code
+plugin; the extension installs from the Chrome Web Store. Nothing to clone or
+build:
 
 ```sh
-# 1. Build the extension and the MCP server
-npm install
-npm run build
-
-# 2. Register the MCP server with your assistant (run from the repo root once).
-#    Claude Code:
-claude mcp add redline -- node "$(pwd)/mcp-server/dist/index.js"
-#    Any other MCP client: point it at `node <repo>/mcp-server/dist/index.js`
-#    over stdio (see "Compatibility" below).
-
-# 3. Install the pickup skill into the project you want to review
-mkdir -p .claude/skills && cp -r ./skills/comments .claude/skills/
-
-# 4. Load the extension in Chrome:
-#    chrome://extensions -> enable Developer mode -> Load unpacked -> select extension/dist
+# 1. In Claude Code, add the marketplace and install the plugin. This registers
+#    the redline MCP server (run on demand via npx) and the /comments skill,
+#    with nothing to clone or build:
+/plugin marketplace add pallandir/redline
+/plugin install redline@redline
 ```
 
-Now open any frontend, a `localhost` dev server or a remote preview, click the
-Redline toolbar icon, leave comments, hit **Send**, and run `/comments` in Claude
-Code (or have your assistant call the `list_comments` MCP tool). Clicking the icon
-is what grants Redline access to that one tab; it has no access to any page until
-you do.
+The browser extension is **coming soon to the Chrome Web Store**. Until then,
+build it once and load it unpacked: run `npm install && npm run build`, then in
+`chrome://extensions` enable Developer mode and **Load unpacked** →
+`extension/dist` (see [Getting Started](#getting-started)).
+
+```sh
+# Prefer another MCP client, or no plugin? Register the server directly over
+# stdio; it is published to npm and runs with no clone:
+claude mcp add redline -- npx -y @redline/mcp-server
+```
+
+Now open your frontend and click the Redline toolbar icon. On a `localhost` dev
+server, comments save into the project automatically as you leave them; run
+`/comments` in Claude Code to pick them up, or `/loop /comments` once to pick up
+every comment continuously. On a remote preview there is no local project, so use
+**Handoff** to export a Markdown report instead. Clicking the icon is what grants
+Redline access to that one tab; it has no access to any page until you do.
 
 > [!NOTE]
 > Redline works with any MCP-capable AI coding assistant. It has been **tested
@@ -96,51 +99,42 @@ the assistant's server is closed and drain automatically on the next session.
 
 ## Getting Started
 
-Requires Node 20+.
+**Install the plugin (MCP server + `/comments` skill).** In Claude Code:
 
 ```sh
-# Install both workspaces and wire git hooks
-npm install
-
-# Build the extension and the MCP server
-npm run build
+/plugin marketplace add pallandir/redline
+/plugin install redline@redline
 ```
 
-**Register the MCP server.** Run it from the project root you want to review so
-the comment store lands in that repo. Pick whichever install channel suits your
-assistant:
+This registers the redline MCP server, run on demand via `npx -y
+@redline/mcp-server` (published to npm, no clone), and the `/comments` skill. Your
+assistant spawns the server each session from the project root you are working
+in, so the comment store lands in that repo: a localhost listener on port 7474
+(falling back to 7475/7476), writing to `.claude/design-comments.md` with
+screenshots in `.claude/design-shots/`.
+
+**Other MCP clients.** Point any stdio MCP client at `npx -y @redline/mcp-server`,
+launched from the project root you want to review:
 
 ```sh
-# From source (this repo, after npm run build):
-claude mcp add redline -- node "$(pwd)/mcp-server/dist/index.js"
-
-# From npm (no clone needed), once published:
 claude mcp add redline -- npx -y @redline/mcp-server
-
-# Claude Desktop / one-click MCP clients: install the redline.mcpb bundle
-# (built with `npm run pack:mcpb --workspace @redline/mcp-server`) and pick your
-# project directory when prompted.
-
-# Any other MCP client: configure a stdio server whose command is
-# `node <repo>/mcp-server/dist/index.js` (or `npx -y @redline/mcp-server`),
-# launched from the project root you want to review.
 ```
 
-Your assistant spawns it automatically each session. It opens a localhost
-listener on port 7474 (falling back to 7475/7476) and writes comments to
-`.claude/design-comments.md` with screenshots in `.claude/design-shots/`.
+For Claude Desktop and other one-click clients, install the `redline.mcpb` bundle
+(built with `npm run pack:mcpb --workspace @redline/mcp-server`) and pick your
+project directory when prompted. Not using the plugin? The `/comments` skill
+lives in `plugin/skills/comments`; copy it into `.claude/skills/` (per project)
+or `~/.claude/skills/` (global).
 
-**Install the `/comments` skill** into the project you want to review, or globally:
+**Install the browser extension.** Coming soon to the Chrome Web Store. Until
+then, build it from source and load it unpacked (requires Node 20+):
 
 ```sh
-mkdir -p .claude/skills && cp -r ./skills/comments .claude/skills/      # per project
-# or: mkdir -p ~/.claude/skills && cp -r ./skills/comments ~/.claude/skills/
+npm install
+npm run build --workspace @redline/extension
+# chrome://extensions -> Developer mode -> Load unpacked -> extension/dist
+# live development: npm run dev --workspace @redline/extension
 ```
-
-**Load the extension.** Once published, install it from the Chrome Web Store. To
-run a local build, open `chrome://extensions`, enable Developer mode, choose
-**Load unpacked**, and select `extension/dist`. For live development use
-`npm run dev --workspace @redline/extension` instead.
 
 > [!IMPORTANT]
 > Both the comment store and screenshots are written under `.claude/` and are
@@ -160,15 +154,17 @@ run a local build, open `chrome://extensions`, enable Developer mode, choose
 3. Pick a tool: **Select** to inspect an element, **Comment** to leave a note,
    **Color** to change text or background live, **Text** to edit copy inline.
    Each saved item pins to its element and lists in the toolbar.
-4. **Send** syncs the items to the MCP server. **Handoff** instead downloads a
-   Markdown report (with frontmatter) for a developer or any AI assistant.
+4. On `localhost`, items save into the project's MCP server automatically as you
+   create them. **Handoff** downloads a Markdown report (with frontmatter) for a
+   developer or any AI assistant; use it on remote pages, where there is no local
+   project to sync into.
 5. In Claude Code, run `/comments`; with any other MCP client, ask it to read the
    comments via `list_comments`. It views the screenshots, proposes a plan, then
-   stops. It applies the changes and marks each `resolve_comment` only after you
-   approve.
+   stops. It applies the changes and resolves each comment only after you approve,
+   from the toolbar (**Apply**) or in chat.
 
-For hands-off pickup, start the skill in a loop once so clicking **Send** is
-enough to trigger a fresh plan on the next poll:
+For hands-off pickup, start the skill in a loop once so new comments trigger a
+fresh plan automatically, with no need to re-run `/comments`:
 
 ```sh
 /loop /comments

@@ -5,7 +5,7 @@ import type { DraftRequest, Rect, RequestKind, StyleChange, TextChange } from ".
 import { Drawer } from "./drawer.js";
 import { downloadHandoff } from "./handoff.js";
 import { Surface } from "./surface.js";
-import { type ToolId, Toolbar } from "./toolbar.js";
+import { type Mode, type ToolId, Toolbar } from "./toolbar.js";
 import { openColorPanel, openTextEditor } from "./tools.js";
 
 declare global {
@@ -19,19 +19,40 @@ if (!window.__redlineLoaded) {
   init();
 }
 
+const STATUS_POLL_MS = 5000;
+const CHECK_TIMEOUT_MS = 4000;
+
+function pageMode(): Mode {
+  const host = location.hostname;
+  const local =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "[::1]" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".local");
+  return local ? "local" : "remote";
+}
+
 function init(): void {
   let active = false;
   let interacting = false;
   let drawerOpen = false;
+  let checking = false;
   let lastPins: PinModel[] = [];
   let lastStatus: QueueStatus | null = null;
+  let pollTimer: number | null = null;
+  const mode = pageMode();
 
   const surface = new Surface();
   let toolbar: Toolbar | null = null;
   let drawer: Drawer | null = null;
 
-  function send(message: Message): Promise<Response> {
-    return chrome.runtime.sendMessage(message);
+  async function send(message: Message): Promise<Response> {
+    try {
+      return await chrome.runtime.sendMessage(message);
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   }
 
   chrome.runtime.onMessage.addListener((message: Message) => {
@@ -44,9 +65,11 @@ function init(): void {
     if (on) {
       toolbar = new Toolbar(surface, {
         onComments: toggleDrawer,
-        onSend: handleSend,
         onHandoff: handleHandoff,
         onReset: handleReset,
+        onReconnect: handleReconnect,
+        onApprove: (id) => void handleDecision(id, "approve"),
+        onReject: (id) => void handleDecision(id, "reject"),
       });
       drawer = new Drawer(surface, {
         onEdit: (cid, text) => void editComment(cid, text),
@@ -54,7 +77,9 @@ function init(): void {
         onClose: toggleDrawer,
       });
       void refresh();
+      startPolling();
     } else {
+      stopPolling();
       surface.closeActionMenu();
       surface.setSelection(null);
       surface.highlightHover(null);
@@ -65,6 +90,7 @@ function init(): void {
       drawer = null;
       interacting = false;
       drawerOpen = false;
+      checking = false;
       surface.unmount();
     }
     updateCursor();
@@ -204,8 +230,36 @@ function init(): void {
     return res.ok && res.dataUrl ? res.dataUrl : null;
   }
 
-  async function handleSend(): Promise<void> {
-    await send({ type: "flush" });
+  async function handleDecision(id: string, decision: "approve" | "reject"): Promise<void> {
+    await send({ type: "plan-decision", id, decision });
+    await refresh();
+  }
+
+  async function handleReconnect(): Promise<void> {
+    if (checking) return;
+    checking = true;
+    render();
+    await withTimeout(refresh(), CHECK_TIMEOUT_MS).catch(() => {});
+    checking = false;
+    render();
+  }
+
+  function startPolling(): void {
+    if (pollTimer !== null) return;
+    pollTimer = window.setInterval(() => void pollStatus(), STATUS_POLL_MS);
+  }
+
+  function stopPolling(): void {
+    if (pollTimer === null) return;
+    window.clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  async function pollStatus(): Promise<void> {
+    if (!active || checking) return;
+    const res = await send({ type: "queue-status" });
+    const next = res.ok ? (res.status ?? null) : null;
+    if (!statusChanged(lastStatus, next)) return;
     await refresh();
   }
 
@@ -277,7 +331,7 @@ function init(): void {
   }
 
   function render(): void {
-    toolbar?.render({ count: lastPins.length, status: lastStatus, drawerOpen });
+    toolbar?.render({ mode, count: lastPins.length, status: lastStatus, drawerOpen, checking });
     drawer?.render(lastPins);
   }
 
@@ -290,4 +344,37 @@ function init(): void {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     });
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function statusChanged(a: QueueStatus | null, b: QueueStatus | null): boolean {
+  if (a === b) return false;
+  if (!a || !b) return true;
+  return (
+    a.serverReachable !== b.serverReachable ||
+    a.port !== b.port ||
+    a.queued !== b.queued ||
+    a.watching !== b.watching ||
+    a.root !== b.root ||
+    planKey(a.plan) !== planKey(b.plan)
+  );
+}
+
+function planKey(plan: QueueStatus["plan"]): string {
+  return plan ? `${plan.id}:${plan.status}:${plan.items.length}` : "";
 }

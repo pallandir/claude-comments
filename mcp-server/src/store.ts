@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import type {
   Comment,
   CommentStatus,
   IncomingComment,
+  Lease,
+  Plan,
+  PlanItem,
   RequestKind,
   StyleChange,
   TextChange,
@@ -13,16 +16,70 @@ import type {
 const STORE_DIR = ".claude";
 const STORE_FILE = join(STORE_DIR, "design-comments.md");
 const SHOTS_DIR = join(STORE_DIR, "design-shots");
+const PLAN_FILE = join(STORE_DIR, "redline-plan.json");
+const LEASE_FILE = join(STORE_DIR, "redline-lock.json");
 
 export class CommentStore {
-  private readonly root: string;
+  private readonly storeRoot: string;
   private readonly storePath: string;
   private readonly shotsPath: string;
+  private readonly planPath: string;
+  private readonly leasePath: string;
 
   constructor(root: string) {
-    this.root = root;
+    this.storeRoot = root;
     this.storePath = join(root, STORE_FILE);
     this.shotsPath = join(root, SHOTS_DIR);
+    this.planPath = join(root, PLAN_FILE);
+    this.leasePath = join(root, LEASE_FILE);
+  }
+
+  get root(): string {
+    return this.storeRoot;
+  }
+
+  async getLease(): Promise<Lease | null> {
+    return readJsonFile<Lease>(this.leasePath);
+  }
+
+  async writeLease(lease: Lease): Promise<void> {
+    await writeJsonFile(this.leasePath, lease);
+  }
+
+  async clearLease(): Promise<void> {
+    await rm(this.leasePath, { force: true });
+  }
+
+  async getPlan(): Promise<Plan | null> {
+    return readJsonFile<Plan>(this.planPath);
+  }
+
+  async setPlan(items: PlanItem[], note: string | null): Promise<Plan> {
+    const plan: Plan = {
+      id: `p-${randomUUID().slice(0, 8)}`,
+      createdAt: new Date().toISOString(),
+      status: "proposed",
+      note,
+      items,
+    };
+    await this.writePlan(plan);
+    return plan;
+  }
+
+  async decidePlan(id: string, status: "approved" | "rejected"): Promise<Plan | null> {
+    const plan = await this.getPlan();
+    if (!plan || plan.id !== id) return null;
+    plan.status = status;
+    await this.writePlan(plan);
+    return plan;
+  }
+
+  async clearPlan(): Promise<void> {
+    await rm(this.planPath, { force: true });
+  }
+
+  private async writePlan(plan: Plan): Promise<void> {
+    await writeJsonFile(this.planPath, plan);
   }
 
   async list(status?: CommentStatus): Promise<Comment[]> {
@@ -93,19 +150,47 @@ export class CommentStore {
   }
 
   private async read(): Promise<Comment[]> {
-    try {
-      const raw = await readFile(this.storePath, "utf8");
-      return parse(raw);
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw err;
-    }
+    const raw = await readTextFile(this.storePath);
+    return raw === null ? [] : parse(raw);
   }
 
   private async write(comments: Comment[]): Promise<void> {
-    await mkdir(dirname(this.storePath), { recursive: true });
-    await writeFile(this.storePath, serialize(comments), "utf8");
+    await writeFileAtomic(this.storePath, serialize(comments));
   }
+}
+
+async function readTextFile(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
+}
+
+// A truncated or hand-edited sidecar must read as "absent", not crash the
+// request handler that reads it; a fresh write repairs it.
+async function readJsonFile<T>(path: string): Promise<T | null> {
+  const raw = await readTextFile(path);
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function writeJsonFile(path: string, value: unknown): Promise<void> {
+  await writeFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+// Write to a temp file and rename over the target so a concurrent reader never
+// observes a partially written file.
+async function writeFileAtomic(path: string, contents: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.${randomUUID().slice(0, 8)}.tmp`;
+  await writeFile(tmp, contents, "utf8");
+  await rename(tmp, path);
 }
 
 function routeOf(url: string): string {

@@ -11,6 +11,21 @@ export interface PinModel {
   removable: boolean;
 }
 
+export type PlanStatus = "proposed" | "approved" | "rejected" | "applied";
+
+export interface PlanItemView {
+  commentId: string;
+  file: string;
+  summary: string;
+}
+
+export interface PlanView {
+  id: string;
+  status: PlanStatus;
+  note: string | null;
+  items: PlanItemView[];
+}
+
 export type Message =
   | { type: "set-active"; on: boolean }
   | { type: "capture-region"; rect: Rect; dpr: number }
@@ -23,12 +38,16 @@ export type Message =
   | { type: "count-all" }
   | { type: "update-comment"; cid: string; text: string }
   | { type: "flush" }
+  | { type: "plan-decision"; id: string; decision: "approve" | "reject" }
   | { type: "queue-status" };
 
 export interface QueueStatus {
   queued: number;
   serverReachable: boolean;
   port: number | null;
+  root?: string | null;
+  watching?: boolean;
+  plan?: PlanView | null;
 }
 
 export type Response =

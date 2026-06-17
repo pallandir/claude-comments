@@ -64,7 +64,12 @@ after(async () => {
 test("/health identifies the service to the extension", async () => {
   const res = await call("GET", "/health", { Host: loopbackHost(), Origin: ext });
   assert.equal(res.status, 200);
-  assert.deepEqual(JSON.parse(res.body), { ok: true, service: "redline" });
+  const body = JSON.parse(res.body);
+  assert.equal(body.ok, true);
+  assert.equal(body.service, "redline");
+  assert.equal(body.root, root);
+  assert.equal(typeof body.startedAt, "string");
+  assert.equal(typeof body.pid, "number");
 });
 
 test("rejects a web-page origin (CSRF / prompt-injection channel)", async () => {

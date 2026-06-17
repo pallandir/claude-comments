@@ -44,6 +44,29 @@ export interface Comment {
   viewport: { w: number; h: number };
 }
 
+export interface Lease {
+  pid: number;
+  startedAt: string;
+  acquiredAt: string;
+  heartbeatAt: string;
+}
+
+export type PlanStatus = "proposed" | "approved" | "rejected" | "applied";
+
+export interface PlanItem {
+  commentId: string;
+  file: string;
+  summary: string;
+}
+
+export interface Plan {
+  id: string;
+  createdAt: string;
+  status: PlanStatus;
+  note: string | null;
+  items: PlanItem[];
+}
+
 export interface IncomingComment {
   kind?: RequestKind;
   url: string;

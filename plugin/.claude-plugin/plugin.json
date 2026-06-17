@@ -1,0 +1,11 @@
+{
+  "name": "redline",
+  "description": "Pick up UI comments left through the Redline browser extension and turn them into planned, approved code changes.",
+  "version": "1.0.0",
+  "author": {
+    "name": "pallandir",
+    "url": "https://github.com/pallandir"
+  },
+  "homepage": "https://github.com/pallandir/redline",
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

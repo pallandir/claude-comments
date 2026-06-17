@@ -1,4 +1,5 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Broker } from "./broker.js";
 import { startIngestServer } from "./http.js";
 import { createMcpServer } from "./server.js";
 import { CommentStore } from "./store.js";
@@ -15,22 +16,32 @@ function parsePorts(): number[] {
 async function main(): Promise<void> {
   const root = process.env.REDLINE_ROOT ?? process.cwd();
   const store = new CommentStore(root);
+  const broker = new Broker();
 
   // stdout is reserved for the MCP protocol; all logs go to stderr.
   const log = (msg: string) => process.stderr.write(`[redline] ${msg}\n`);
 
-  const ingest = await startIngestServer(store, parsePorts(), log);
+  const ingest = await startIngestServer(store, parsePorts(), log, broker);
   log(`ingest listening on http://127.0.0.1:${ingest.port}, store root ${root}`);
 
-  const server = createMcpServer(store);
-  await server.connect(new StdioServerTransport());
+  const server = createMcpServer(store, broker);
+  const transport = new StdioServerTransport();
 
+  let closing = false;
   const shutdown = async () => {
+    if (closing) return;
+    closing = true;
     await ingest.close();
     process.exit(0);
   };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+
+  transport.onclose = () => void shutdown();
+  process.stdin.on("end", () => void shutdown());
+  process.stdin.on("close", () => void shutdown());
+  process.on("SIGINT", () => void shutdown());
+  process.on("SIGTERM", () => void shutdown());
+
+  await server.connect(transport);
 }
 
 main().catch((err) => {

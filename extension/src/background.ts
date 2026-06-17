@@ -5,15 +5,17 @@ import {
   clearForUrl,
   clearServerForUrl,
   countAll,
+  decidePlan,
   enqueue,
   fetchServerComments,
   flush,
+  isLocalUrl,
   listForUrl,
   remove,
   status,
   update,
 } from "./lib/transport.js";
-import type { Message, PinModel, Response } from "./messages.js";
+import type { Message, PinModel, QueueStatus, Response } from "./messages.js";
 
 const FLUSH_ALARM = "redline-flush";
 const ACTIVE_KEY = "cc-active";
@@ -84,11 +86,16 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     }
     case "save-request": {
       const item = await enqueue(message.draft);
-      const result = await flush();
+      const result = isLocalUrl(message.draft.url) ? await flush() : offlineStatus();
       return { ok: true, status: result, cid: item.cid };
     }
     case "page-comments":
       return { ok: true, pins: await pagePins(message.url) };
+    case "plan-decision": {
+      if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true, status: offlineStatus() };
+      await decidePlan(message.id, message.decision);
+      return { ok: true, status: await status() };
+    }
     case "get-comments":
       return { ok: true, comments: await listForUrl(message.url) };
     case "remove-comment":
@@ -106,13 +113,21 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     case "update-comment":
       await update(message.cid, message.text);
       return { ok: true, status: await status() };
-    case "flush":
-      return { ok: true, status: await flush() };
-    case "queue-status":
-      return { ok: true, status: await status() };
+    case "flush": {
+      const local = isLocalUrl(sender.tab?.url ?? "");
+      return { ok: true, status: local ? await flush() : offlineStatus() };
+    }
+    case "queue-status": {
+      const local = isLocalUrl(sender.tab?.url ?? "");
+      return { ok: true, status: local ? await status() : offlineStatus() };
+    }
     default:
       return { ok: false, error: `unhandled message: ${(message as Message).type}` };
   }
+}
+
+function offlineStatus(): QueueStatus {
+  return { queued: 0, serverReachable: false, port: null, root: null, watching: false, plan: null };
 }
 
 async function isActive(tabId: number): Promise<boolean> {
@@ -130,7 +145,10 @@ async function setActive(tabId: number, on: boolean): Promise<void> {
 }
 
 async function pagePins(url: string): Promise<PinModel[]> {
-  const [queued, synced] = await Promise.all([listForUrl(url), fetchServerComments(url)]);
+  const [queued, synced] = await Promise.all([
+    listForUrl(url),
+    isLocalUrl(url) ? fetchServerComments(url) : Promise.resolve([]),
+  ]);
   return [
     ...queued.map(
       (q): PinModel => ({
