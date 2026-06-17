@@ -1,7 +1,8 @@
 {
-  "name": "@claude-comments/extension",
+  "name": "@redline/extension",
   "version": "0.1.0",
   "description": "Chromium MV3 extension to leave right-click comments on a local frontend.",
+  "license": "SEE LICENSE IN LICENSE.md",
   "private": true,
   "type": "module",
   "scripts": {

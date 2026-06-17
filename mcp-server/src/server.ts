@@ -7,13 +7,13 @@ const statusEnum = z.enum(["open", "resolved", "wontfix"]);
 
 export function createMcpServer(store: CommentStore): McpServer {
   const server = new McpServer({
-    name: "claude-comments",
+    name: "redline",
     version: "0.1.0",
   });
 
   server.tool(
     "list_comments",
-    "List UI comments left through the Claude Comments extension. Filter by status.",
+    "List UI comments left through the Redline extension. Filter by status.",
     { status: statusEnum.optional() },
     async ({ status }) => {
       const comments = await store.list(status);

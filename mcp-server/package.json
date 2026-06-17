@@ -1,10 +1,11 @@
 {
-  "name": "@claude-comments/mcp-server",
+  "name": "@redline/mcp-server",
   "version": "0.1.0",
-  "description": "MCP server that ingests UI comments from the Claude Comments extension and exposes them to Claude Code.",
+  "description": "MCP server that ingests UI comments from the Redline extension and exposes them to Claude Code.",
+  "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "bin": {
-    "claude-comments-mcp": "dist/index.js"
+    "redline-mcp": "dist/index.js"
   },
   "files": ["dist"],
   "scripts": {

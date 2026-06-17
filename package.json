@@ -1,9 +1,10 @@
 {
-  "name": "claude-comments",
+  "name": "redline",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Right-click comments on any local frontend, picked up by Claude Code through an MCP server.",
+  "license": "SEE LICENSE IN LICENSE.md",
   "workspaces": ["extension", "mcp-server"],
   "engines": {
     "node": ">=20"

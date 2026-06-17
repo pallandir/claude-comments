@@ -1,6 +1,6 @@
-# @claude-comments/mcp-server
+# @redline/mcp-server
 
-MCP server that ingests UI comments from the Claude Comments extension and
+MCP server that ingests UI comments from the Redline extension and
 exposes them to Claude Code.
 
 It does two things in one process:
@@ -35,12 +35,12 @@ Both are gitignored.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `CLAUDE_COMMENTS_PORT` | 7474 | Preferred ingest port (falls back to 7475/7476). |
-| `CLAUDE_COMMENTS_ROOT` | `process.cwd()` | Where the store is written. |
+| `REDLINE_PORT` | 7474 | Preferred ingest port (falls back to 7475/7476). |
+| `REDLINE_ROOT` | `process.cwd()` | Where the store is written. |
 
 ## Develop
 
 ```bash
-npm run dev --workspace @claude-comments/mcp-server     # tsup watch
-npm run build --workspace @claude-comments/mcp-server
+npm run dev --workspace @redline/mcp-server     # tsup watch
+npm run build --workspace @redline/mcp-server
 ```

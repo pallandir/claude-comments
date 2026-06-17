@@ -1,6 +1,6 @@
 # cc-example-react
 
-A demo dashboard for exercising the Claude Comments extension end to end. It is a
+A demo dashboard for exercising the Redline extension end to end. It is a
 plain Vite + React app with `@react-dev-inspector/babel-plugin` enabled, so every
 element carries `data-inspector-*` source attributes and comments resolve to
 `src/App.jsx:line:column`.
@@ -24,7 +24,7 @@ Code **from this folder**.
    ```bash
    claude
    ```
-   This spawns the `claude-comments` MCP server on `:7474`; the toolbar status dot
+   This spawns the `redline` MCP server on `:7474`; the toolbar status dot
    turns green.
 3. In the browser at `http://localhost:3001`, leave comments, change a color, or
    edit text, then click **⤴ Send** in the toolbar.

@@ -1,7 +1,7 @@
 import type { PinStatus, QueueStatus } from "../messages.js";
 import type { DraftRequest, QueuedRequest, RequestKind } from "../types.js";
 
-const QUEUE_KEY = "claude-comments-queue";
+const QUEUE_KEY = "redline-queue";
 const PORTS = [7474, 7475, 7476];
 
 export interface ServerComment {

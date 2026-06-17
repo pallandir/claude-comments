@@ -1,4 +1,4 @@
-# @claude-comments/extension
+# @redline/extension
 
 Chromium MV3 extension to leave right-click comments on a local frontend.
 
@@ -28,8 +28,8 @@ find the code by search.
 ## Develop
 
 ```bash
-npm run dev --workspace @claude-comments/extension      # vite + HMR
-npm run build --workspace @claude-comments/extension    # outputs dist/
+npm run dev --workspace @redline/extension      # vite + HMR
+npm run build --workspace @redline/extension    # outputs dist/
 ```
 
 Load `extension/dist` via `chrome://extensions` → Developer mode → Load unpacked.

@@ -49,3 +49,4 @@ AGENTS.md
 .mcp.json
 *.local.md
 DESIGN.md
+docs/*
