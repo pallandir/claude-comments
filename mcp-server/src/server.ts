@@ -50,13 +50,19 @@ export function createMcpServer(store: CommentStore): McpServer {
 }
 
 function render(c: Comment): string {
-  const lines = [
-    `[${c.status}] ${c.id} · ${c.route}`,
-    c.text,
+  const lines = [`[${c.status}] ${c.id} · ${c.route} · ${c.kind}`, c.text];
+  for (const change of c.styleChanges) {
+    const at = change.cssSource ? ` (${change.cssSource.file}:${change.cssSource.line})` : "";
+    lines.push(`change ${change.property}: ${change.from} -> ${change.to}${at}`);
+  }
+  if (c.textChange) {
+    lines.push(`text: ${JSON.stringify(c.textChange.from)} -> ${JSON.stringify(c.textChange.to)}`);
+  }
+  lines.push(
     c.source
       ? `source: ${c.source.path}:${c.source.line}:${c.source.column} (${c.source.via})`
       : `selector: ${c.fingerprint.selector}`,
-  ];
+  );
   if (c.screenshot) lines.push(`screenshot: ${c.screenshot}`);
   lines.push(`url: ${c.url}`);
   return lines.join("\n");

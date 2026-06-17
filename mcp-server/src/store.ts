@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import type { Comment, CommentStatus, IncomingComment } from "./types.js";
+import type {
+  Comment,
+  CommentStatus,
+  IncomingComment,
+  RequestKind,
+  StyleChange,
+  TextChange,
+} from "./types.js";
 
 const STORE_DIR = ".claude";
 const STORE_FILE = join(STORE_DIR, "design-comments.md");
@@ -39,9 +46,12 @@ export class CommentStore {
       createdAt: new Date().toISOString(),
       url: incoming.url,
       route: routeOf(incoming.url),
+      kind: incoming.kind ?? "comment",
       text: incoming.text,
       status: "open",
       source: incoming.source ?? null,
+      styleChanges: incoming.styleChanges ?? [],
+      textChange: incoming.textChange ?? null,
       fingerprint: incoming.fingerprint,
       screenshot,
       viewport: incoming.viewport,
@@ -63,6 +73,13 @@ export class CommentStore {
   async clearResolved(): Promise<number> {
     const comments = await this.read();
     const kept = comments.filter((c) => c.status === "open");
+    await this.write(kept);
+    return comments.length - kept.length;
+  }
+
+  async clear(url?: string): Promise<number> {
+    const comments = await this.read();
+    const kept = url ? comments.filter((c) => c.url !== url) : [];
     await this.write(kept);
     return comments.length - kept.length;
   }
@@ -101,8 +118,17 @@ function routeOf(url: string): string {
 
 function serialize(comments: Comment[]): string {
   const blocks = comments.map((c) => {
-    const lines = [`## [${c.status}] ${c.id} · ${c.route}`, `> ${c.text}`, ""];
+    const lines = [`## [${c.status}] ${c.id} · ${c.route} · ${c.kind}`, `> ${c.text}`, ""];
     if (c.screenshot) lines.push(`![${c.id}](${c.screenshot})`, "");
+    for (const change of c.styleChanges) {
+      const css = change.cssSource ? ` @ ${change.cssSource.file}:${change.cssSource.line}` : "";
+      lines.push(`- change: ${change.property}: ${change.from} -> ${change.to}${css}`);
+    }
+    if (c.textChange) {
+      lines.push(
+        `- text-change: ${JSON.stringify(c.textChange.from)} -> ${JSON.stringify(c.textChange.to)}`,
+      );
+    }
     if (c.source) {
       lines.push(
         `- source: ${c.source.path}:${c.source.line}:${c.source.column} (${c.source.via})`,
@@ -120,29 +146,43 @@ function serialize(comments: Comment[]): string {
   return `# Design comments\n\n${blocks.join("\n\n")}\n`;
 }
 
-const HEADING = /^## \[(open|resolved|wontfix)\] (\S+) · (.+)$/;
+const HEADING = /^## \[(open|resolved|wontfix)\] (\S+) · (.+?)(?: · (comment|style|text))?$/;
 const KV = /^- (\w+): (.+)$/;
 const SOURCE = /^(.+):(\d+):(\d+) \((.+)\)$/;
 
+interface Draft {
+  kv: Record<string, string>;
+  status: CommentStatus;
+  id: string;
+  route: string;
+  kind: RequestKind;
+  text?: string;
+  screenshot?: string;
+  styleChanges: StyleChange[];
+  textChange: TextChange | null;
+}
+
 function parse(raw: string): Comment[] {
   const comments: Comment[] = [];
-  let current: Partial<Comment> & { kv: Record<string, string> } = { kv: {} };
-  let inBlock = false;
+  let current: Draft | null = null;
 
   const flush = () => {
-    if (!inBlock || !current.id) return;
+    if (!current) return;
     const kv = current.kv;
     const source = kv.source?.match(SOURCE);
     comments.push({
       id: current.id,
       createdAt: kv.created ?? new Date(0).toISOString(),
       url: kv.url ?? "",
-      route: current.route ?? routeOf(kv.url ?? ""),
+      route: current.route,
+      kind: current.kind,
       text: current.text ?? "",
-      status: current.status ?? "open",
+      status: current.status,
       source: source
         ? { path: source[1], line: Number(source[2]), column: Number(source[3]), via: source[4] }
         : null,
+      styleChanges: current.styleChanges,
+      textChange: current.textChange,
       fingerprint: {
         selector: kv.selector ?? "",
         innerText: safeJson(kv.text) ?? "",
@@ -158,16 +198,18 @@ function parse(raw: string): Comment[] {
     const heading = line.match(HEADING);
     if (heading) {
       flush();
-      inBlock = true;
       current = {
         kv: {},
         status: heading[1] as CommentStatus,
         id: heading[2],
         route: heading[3],
+        kind: (heading[4] as RequestKind) ?? "comment",
+        styleChanges: [],
+        textChange: null,
       };
       continue;
     }
-    if (!inBlock) continue;
+    if (!current) continue;
     if (line.startsWith("> ")) {
       current.text = line.slice(2);
       continue;
@@ -177,11 +219,43 @@ function parse(raw: string): Comment[] {
       current.screenshot = shot[1];
       continue;
     }
+    if (line.startsWith("- change: ")) {
+      const change = parseChange(line.slice("- change: ".length));
+      if (change) current.styleChanges.push(change);
+      continue;
+    }
+    if (line.startsWith("- text-change: ")) {
+      current.textChange = parseTextChange(line.slice("- text-change: ".length));
+      continue;
+    }
     const kv = line.match(KV);
     if (kv) current.kv[kv[1]] = kv[2];
   }
   flush();
   return comments;
+}
+
+function parseChange(body: string): StyleChange | null {
+  let rest = body;
+  let cssSource: StyleChange["cssSource"] = null;
+  const at = rest.lastIndexOf(" @ ");
+  if (at >= 0) {
+    const loc = rest.slice(at + 3).match(/^(.+):(\d+)$/);
+    if (loc) cssSource = { file: loc[1], line: Number(loc[2]) };
+    rest = rest.slice(0, at);
+  }
+  const colon = rest.indexOf(": ");
+  if (colon < 0) return null;
+  const property = rest.slice(0, colon);
+  const [from, to] = rest.slice(colon + 2).split(" -> ");
+  if (from === undefined || to === undefined) return null;
+  return { property, from, to, cssSource };
+}
+
+function parseTextChange(body: string): TextChange | null {
+  const parts = body.split(" -> ");
+  if (parts.length !== 2) return null;
+  return { from: safeJson(parts[0]) ?? parts[0], to: safeJson(parts[1]) ?? parts[1] };
 }
 
 function parseViewport(value?: string): { w: number; h: number } {

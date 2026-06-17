@@ -64,11 +64,19 @@ select `extension/dist`. For live development use `npm run dev --workspace
 ## Use it
 
 1. Run your frontend on `localhost`.
-2. Right-click an element → "Add Claude comment" → write a note → Save.
-3. In Claude Code, ask it to read the comments (it calls `list_comments`), then
-   plan and apply the revamp. It marks each item with `resolve_comment`.
+2. Click the **Claude Comments** toolbar icon to activate it on the page. A
+   draggable Figma-style toolbar appears.
+3. Use a tool: **Select** to inspect, **Comment** to leave a note, **Color** to
+   change text/background color live, **Text** to edit copy inline. Each saved
+   item pins to its element and lists in the toolbar.
+4. **Send to Claude** syncs to the MCP server; **Handoff** downloads a Markdown
+   report (with frontmatter) for a developer or any AI assistant.
+5. In Claude Code, run `/comments`: it reads the items (`list_comments`), views
+   screenshots, plans and applies the changes, and marks each `resolve_comment`.
 
-Comments queue locally if Claude Code is not running and sync on the next session.
+Items queue locally if Claude Code is not running and sync on the next session.
+Optional: toggle **Precise source** to map color edits to the exact CSS rule and
+file via the Chrome debugger.
 
 ## Quality gates
 

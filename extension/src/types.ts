@@ -19,16 +19,33 @@ export interface Fingerprint {
   rect: Rect;
 }
 
-export interface DraftComment {
+export type RequestKind = "comment" | "style" | "text";
+
+export interface StyleChange {
+  property: string;
+  from: string;
+  to: string;
+  cssSource?: { file: string; line: number } | null;
+}
+
+export interface TextChange {
+  from: string;
+  to: string;
+}
+
+export interface DraftRequest {
+  kind: RequestKind;
   url: string;
   text: string;
+  styleChanges?: StyleChange[];
+  textChange?: TextChange;
   source: SourceLocation | null;
   fingerprint: Fingerprint;
   screenshotDataUrl: string | null;
   viewport: { w: number; h: number };
 }
 
-export interface QueuedComment extends DraftComment {
+export interface QueuedRequest extends DraftRequest {
   cid: string;
   queuedAt: number;
 }

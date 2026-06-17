@@ -17,7 +17,9 @@ Comments resolve to `file:line:column` when the page exposes an inspector data
 attribute. Add the matching plugin to your dev build:
 
 - React / Next: [`react-dev-inspector`](https://github.com/zthxxx/react-dev-inspector)
-- Vue / Nuxt: [`vite-plugin-vue-inspector`](https://github.com/webfansplz/vite-plugin-vue-inspector)
+- Vue / Nuxt: [`vite-plugin-vue-inspector`](https://github.com/webfansplz/vite-plugin-vue-inspector),
+  configured with `Inspector({ cleanHtml: false })`. The default `cleanHtml: true`
+  strips `data-v-inspector` from the rendered DOM, so the extension cannot read it.
 - Svelte / SvelteKit: Svelte Inspector (built into `@sveltejs/vite-plugin-svelte`)
 
 Without one, the comment still carries a selector, text, and rect so Claude can

@@ -6,9 +6,10 @@ export default defineManifest({
   manifest_version: 3,
   name: "Claude Comments",
   version: "0.1.0",
-  description: "Right-click comments on a local frontend, picked up by Claude Code.",
-  permissions: ["contextMenus", "activeTab", "scripting", "storage", "unlimitedStorage", "alarms"],
-  host_permissions: LOCAL_MATCHES,
+  description:
+    "A Figma-style dev toolbar to comment on and tweak a local frontend for Claude Code.",
+  permissions: ["activeTab", "scripting", "storage", "unlimitedStorage", "alarms", "debugger"],
+  host_permissions: ["<all_urls>"],
   background: {
     service_worker: "src/background.ts",
     type: "module",
@@ -21,7 +22,6 @@ export default defineManifest({
     },
   ],
   action: {
-    default_popup: "src/popup/index.html",
-    default_title: "Claude Comments",
+    default_title: "Claude Comments — click to toggle on this page",
   },
 });

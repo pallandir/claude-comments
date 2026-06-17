@@ -1,5 +1,5 @@
 import type { PinStatus, QueueStatus } from "../messages.js";
-import type { DraftComment, QueuedComment } from "../types.js";
+import type { DraftRequest, QueuedRequest, RequestKind } from "../types.js";
 
 const QUEUE_KEY = "claude-comments-queue";
 const PORTS = [7474, 7475, 7476];
@@ -9,32 +9,83 @@ export interface ServerComment {
   url: string;
   text: string;
   status: PinStatus;
+  kind: RequestKind;
   fingerprint: { selector: string };
 }
 
-async function getQueue(): Promise<QueuedComment[]> {
+async function getQueue(): Promise<QueuedRequest[]> {
   const stored = await chrome.storage.local.get(QUEUE_KEY);
-  return (stored[QUEUE_KEY] as QueuedComment[] | undefined) ?? [];
+  return (stored[QUEUE_KEY] as QueuedRequest[] | undefined) ?? [];
 }
 
-async function setQueue(queue: QueuedComment[]): Promise<void> {
+async function setQueue(queue: QueuedRequest[]): Promise<void> {
   await chrome.storage.local.set({ [QUEUE_KEY]: queue });
 }
 
-export async function enqueue(draft: DraftComment): Promise<QueuedComment> {
+export async function enqueue(draft: DraftRequest): Promise<QueuedRequest> {
   const queue = await getQueue();
-  const item: QueuedComment = { ...draft, cid: crypto.randomUUID(), queuedAt: Date.now() };
+  const item: QueuedRequest = { ...draft, cid: crypto.randomUUID(), queuedAt: Date.now() };
   queue.push(item);
   await setQueue(queue);
   return item;
 }
 
-export async function listForUrl(url: string): Promise<QueuedComment[]> {
+export async function listForUrl(url: string): Promise<QueuedRequest[]> {
   return (await getQueue()).filter((c) => c.url === url);
 }
 
 export async function remove(cid: string): Promise<void> {
   await setQueue((await getQueue()).filter((c) => c.cid !== cid));
+}
+
+export async function clearForUrl(url: string): Promise<void> {
+  await setQueue((await getQueue()).filter((c) => c.url !== url));
+}
+
+export async function clearServerForUrl(url: string): Promise<void> {
+  const port = await findPort();
+  if (port === null) return;
+  try {
+    await fetch(`http://127.0.0.1:${port}/comments?url=${encodeURIComponent(url)}`, {
+      method: "DELETE",
+    });
+  } catch {
+    // server gone; local clear already happened
+  }
+}
+
+export async function clearAll(): Promise<void> {
+  await setQueue([]);
+  const port = await findPort();
+  if (port === null) return;
+  try {
+    await fetch(`http://127.0.0.1:${port}/comments`, { method: "DELETE" });
+  } catch {
+    // server gone; local clear already happened
+  }
+}
+
+export async function countAll(): Promise<number> {
+  const local = (await getQueue()).length;
+  const port = await findPort();
+  if (port === null) return local;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/comments`);
+    if (!res.ok) return local;
+    const all = (await res.json()) as unknown[];
+    return local + all.length;
+  } catch {
+    return local;
+  }
+}
+
+export async function update(cid: string, text: string): Promise<void> {
+  const queue = await getQueue();
+  const item = queue.find((c) => c.cid === cid);
+  if (item) {
+    item.text = text;
+    await setQueue(queue);
+  }
 }
 
 async function findPort(): Promise<number | null> {
@@ -69,7 +120,7 @@ export async function flush(): Promise<QueueStatus> {
     return { queued: queue.length, serverReachable: false, port: null };
   }
 
-  const remaining: QueuedComment[] = [];
+  const remaining: QueuedRequest[] = [];
   for (const item of queue) {
     try {
       const { cid: _cid, queuedAt: _queuedAt, ...draft } = item;

@@ -41,28 +41,36 @@ function toKebab(value: string): string {
 }
 
 function buildSelector(el: Element): string {
-  if (el.id) return `#${CSS.escape(el.id)}`;
-
   const parts: string[] = [];
   let node: Element | null = el;
-  while (node && node.nodeType === Node.ELEMENT_NODE && parts.length < 5) {
-    let part = node.tagName.toLowerCase();
-    if (node.id) {
-      parts.unshift(`#${CSS.escape(node.id)}`);
+  while (node && node.nodeType === Node.ELEMENT_NODE) {
+    const id = node.id ? `#${CSS.escape(node.id)}` : null;
+    if (id && isUnique(id)) {
+      parts.unshift(id);
       break;
     }
-    const index = indexAmongSiblings(node);
-    if (index !== null) part += `:nth-of-type(${index})`;
-    parts.unshift(part);
+    parts.unshift(`${node.tagName.toLowerCase()}:nth-child(${childIndex(node)})`);
+    const candidate = parts.join(" > ");
+    if (isUnique(candidate)) return candidate;
     node = node.parentElement;
   }
   return parts.join(" > ");
 }
 
-function indexAmongSiblings(el: Element): number | null {
-  const parent = el.parentElement;
-  if (!parent) return null;
-  const sameTag = [...parent.children].filter((c) => c.tagName === el.tagName);
-  if (sameTag.length < 2) return null;
-  return sameTag.indexOf(el) + 1;
+function childIndex(el: Element): number {
+  let index = 1;
+  let sibling = el.previousElementSibling;
+  while (sibling) {
+    index++;
+    sibling = sibling.previousElementSibling;
+  }
+  return index;
+}
+
+function isUnique(selector: string): boolean {
+  try {
+    return document.querySelectorAll(selector).length === 1;
+  } catch {
+    return false;
+  }
 }

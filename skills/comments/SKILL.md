@@ -5,8 +5,14 @@ description: Pick up UI comments left through the Claude Comments browser extens
 
 # Comments pickup
 
-Turn the comments a developer left on their running frontend into a planned,
-applied revamp of the source code.
+Turn the requests a developer or designer left on their running frontend into a
+planned, applied revamp of the source code. Each request has a `kind`:
+
+- `comment`: a free-text note about what to change.
+- `style`: one or more concrete style edits, each as `property: from -> to`
+  (for example `color: rgb(17,17,17) -> #d97757`), optionally with the exact CSS
+  rule location `(file:line)` when the user captured it in Precise mode.
+- `text`: a copy edit, `"old text" -> "new text"`.
 
 ## 1. Load the comments
 
@@ -35,6 +41,17 @@ For every open comment, in this order:
 
 Always view the screenshot when one exists, even when `source` is known. The
 comment text describes intent; the image shows the actual visual problem.
+
+## 2b. What to change per kind
+
+- `comment`: implement the described change at the located code.
+- `style`: apply each `property: from -> to`. Prefer the `(file:line)` CSS source
+  when present; otherwise change the declaration that styles the element (inline
+  style, CSS rule, design token, or utility class) so the rendered value matches
+  `to`. Keep the codebase's styling approach (do not add inline styles if the
+  project uses classes or tokens).
+- `text`: replace the `from` string with `to` at the element's source. Watch for
+  the string living in a constant, i18n catalog, or data file rather than markup.
 
 ## 3. Plan before editing
 

@@ -24,7 +24,7 @@ export async function startIngestServer(
 
 function setCors(res: ServerResponse): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
@@ -48,6 +48,14 @@ async function handle(
 
   if (req.method === "GET" && req.url?.startsWith("/comments")) {
     json(res, 200, await store.list());
+    return;
+  }
+
+  if (req.method === "DELETE" && req.url?.startsWith("/comments")) {
+    const url = new URL(req.url, "http://localhost").searchParams.get("url") ?? undefined;
+    const removed = await store.clear(url);
+    log(`cleared ${removed} comment(s)${url ? ` on ${url}` : ""}`);
+    json(res, 200, { removed });
     return;
   }
 

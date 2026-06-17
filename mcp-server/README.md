@@ -29,6 +29,7 @@ Both are gitignored.
 | `GET` | `/health` | Port discovery probe. |
 | `GET` | `/comments` | List stored comments (lets the extension show synced pins). |
 | `POST` | `/comments` | Ingest a new comment from the extension. |
+| `DELETE` | `/comments?url=<page>` | Delete stored comments for a page (omit `url` to clear all). |
 
 ## Env
 

@@ -1,0 +1,101 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]: ◆ Northwind
+    - navigation [ref=e6]:
+      - link "Dashboard" [ref=e7] [cursor=pointer]:
+        - /url: "#top"
+      - link "Analytics" [ref=e8] [cursor=pointer]:
+        - /url: "#top"
+      - link "Customers" [ref=e9] [cursor=pointer]:
+        - /url: "#top"
+      - link "Settings" [ref=e10] [cursor=pointer]:
+        - /url: "#top"
+    - generic [ref=e11]:
+      - generic [ref=e12]: JL
+      - generic [ref=e13]:
+        - generic [ref=e14]: Jamie Lee
+        - generic [ref=e15]: Product owner
+  - main [ref=e16]:
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - heading "Overview" [level=1] [ref=e19]
+        - paragraph [ref=e20]: Welcome back, here is how things look today.
+      - generic [ref=e21]:
+        - textbox "Search…" [ref=e22]
+        - button "New report" [ref=e23] [cursor=pointer]
+    - generic [ref=e24]:
+      - article [ref=e25]:
+        - generic [ref=e26]: Total revenue
+        - strong [ref=e27]: $48,200
+        - generic [ref=e28]: +12.4%
+      - article [ref=e29]:
+        - generic [ref=e30]: Active users
+        - strong [ref=e31]: 1,284
+        - generic [ref=e32]: +3.1%
+      - article [ref=e33]:
+        - generic [ref=e34]: Churn rate
+        - strong [ref=e35]: 2.1%
+        - generic [ref=e36]: "-0.4%"
+      - article [ref=e37]:
+        - generic [ref=e38]: Conversion
+        - strong [ref=e39]: 4.7%
+        - generic [ref=e40]: "-1.2%"
+    - generic [ref=e41]:
+      - article [ref=e42]:
+        - generic [ref=e43]:
+          - heading "Revenue by month" [level=2] [ref=e44]
+          - generic [ref=e45]: Last 6 months
+        - generic [ref=e46]:
+          - generic [ref=e49]: Jan
+          - generic [ref=e52]: Feb
+          - generic [ref=e55]: Mar
+          - generic [ref=e58]: Apr
+          - generic [ref=e61]: May
+          - generic [ref=e64]: Jun
+      - article [ref=e65]:
+        - heading "Traffic sources" [level=2] [ref=e67]
+        - list [ref=e68]:
+          - listitem [ref=e69]:
+            - generic [ref=e71]: Direct
+            - generic [ref=e72]: 38%
+          - listitem [ref=e73]:
+            - generic [ref=e75]: Organic search
+            - generic [ref=e76]: 27%
+          - listitem [ref=e77]:
+            - generic [ref=e79]: Social
+            - generic [ref=e80]: 21%
+          - listitem [ref=e81]:
+            - generic [ref=e83]: Referral
+            - generic [ref=e84]: 14%
+    - generic [ref=e85]:
+      - generic [ref=e86]:
+        - heading "Recent orders" [level=2] [ref=e87]
+        - button "View all" [ref=e88] [cursor=pointer]
+      - table [ref=e89]:
+        - rowgroup [ref=e90]:
+          - row "Order Customer Status Amount" [ref=e91]:
+            - columnheader "Order" [ref=e92]
+            - columnheader "Customer" [ref=e93]
+            - columnheader "Status" [ref=e94]
+            - columnheader "Amount" [ref=e95]
+        - rowgroup [ref=e96]:
+          - row "#1042 Acme Corp Paid $1,200" [ref=e97]:
+            - cell "#1042" [ref=e98]
+            - cell "Acme Corp" [ref=e99]
+            - cell "Paid" [ref=e100]
+            - cell "$1,200" [ref=e101]
+          - row "#1041 Globex Pending $840" [ref=e102]:
+            - cell "#1041" [ref=e103]
+            - cell "Globex" [ref=e104]
+            - cell "Pending" [ref=e105]
+            - cell "$840" [ref=e106]
+          - row "#1040 Initech Paid $2,150" [ref=e107]:
+            - cell "#1040" [ref=e108]
+            - cell "Initech" [ref=e109]
+            - cell "Paid" [ref=e110]
+            - cell "$2,150" [ref=e111]
+          - row "#1039 Umbrella Refunded $320" [ref=e112]:
+            - cell "#1039" [ref=e113]
+            - cell "Umbrella" [ref=e114]
+            - cell "Refunded" [ref=e115]
+            - cell "$320" [ref=e116]
