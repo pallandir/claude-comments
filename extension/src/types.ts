@@ -25,7 +25,6 @@ export interface StyleChange {
   property: string;
   from: string;
   to: string;
-  cssSource?: { file: string; line: number } | null;
 }
 
 export interface TextChange {

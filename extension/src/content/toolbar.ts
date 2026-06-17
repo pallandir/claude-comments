@@ -9,21 +9,18 @@ export interface ToolbarHandlers {
   onComments: () => void;
   onSend: () => void;
   onHandoff: () => void;
-  onTogglePrecise: () => void;
   onReset: () => void;
 }
 
 export interface ToolbarState {
   count: number;
   status: QueueStatus | null;
-  precise: boolean;
   drawerOpen: boolean;
 }
 
 export class Toolbar {
   private readonly root: HTMLElement;
   private readonly commentsBtn: HTMLButtonElement;
-  private readonly preciseBtn: HTMLButtonElement;
   private readonly statusDot: HTMLElement;
 
   constructor(surface: Surface, handlers: ToolbarHandlers) {
@@ -47,10 +44,6 @@ export class Toolbar {
       handlers.onHandoff(),
     );
 
-    this.preciseBtn = action("◎", "Precise CSS source via the Chrome debugger", () =>
-      handlers.onTogglePrecise(),
-    );
-
     const resetBtn = action("↺", "Delete all comments on this page", () => handlers.onReset());
     resetBtn.classList.add("cc-action--danger");
 
@@ -63,7 +56,6 @@ export class Toolbar {
       sep(),
       sendBtn,
       handoffBtn,
-      this.preciseBtn,
       resetBtn,
       sep(),
       this.statusDot,
@@ -77,7 +69,6 @@ export class Toolbar {
   }
 
   render(state: ToolbarState): void {
-    this.preciseBtn.classList.toggle("cc-action--active", state.precise);
     this.commentsBtn.classList.toggle("cc-action--active", state.drawerOpen);
     this.commentsBtn.textContent = `💬 Comments (${state.count})`;
     this.statusDot.dataset.tip = statusText(state.status);

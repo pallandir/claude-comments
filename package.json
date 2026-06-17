@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Leave real-time comments on any local interface and let your AI coding assistant act on them.",
+  "description": "Leave real-time comments on any interface and let your local AI coding assistant act on them.",
   "license": "SEE LICENSE IN LICENSE.md",
   "workspaces": ["extension", "mcp-server"],
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "tmp": "^0.2.7"
   },
   "scripts": {
     "build": "npm run build --workspaces --if-present",

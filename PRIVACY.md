@@ -14,27 +14,33 @@ developer tool. This policy explains what it does and does not do with data.
 
 ## What data Redline handles, and where it stays
 
-When you leave a comment on a local frontend, Redline captures the information
-needed to describe that change: your comment text, a CSS selector and visible
-text for the element, a cropped screenshot of the element, the page URL, and,
-when available, a source file location. This data:
+When you leave a comment on a frontend (a local dev server or a remote preview),
+Redline captures only the information needed to describe that change: your comment
+text, a CSS selector and visible text for the element, a cropped screenshot of the
+element, the page URL, and, when available, a source file location. It captures
+nothing until you activate it on a tab and pick an element, and the screenshot is
+cropped to that element, not the whole page. This data:
 
 - is stored locally in your browser (`chrome.storage`) while queued, and
 - is sent **only** to a server running on your own computer
   (`http://127.0.0.1`), which writes it into your project's `.claude/` folder.
 
-None of it leaves your machine. The localhost server rejects requests from web
-pages, so only the extension can deliver comments to it.
+None of it leaves your machine, even when the page itself is remote. The localhost
+server rejects requests from web pages, so only the extension can deliver comments
+to it.
 
 ## Permissions
 
-- `activeTab`, host access to `localhost`/`127.0.0.1` — to read the element you
-  comment on and capture its screenshot, only on local dev pages.
+- `activeTab`, `scripting` — to inject the overlay into, and read the element you
+  comment on from, only the single tab you activate by clicking the toolbar icon.
+  The extension has no standing access to any site and runs on no page until you
+  click; the access ends when the tab navigates.
+- host access to `localhost`/`127.0.0.1`/`*.localhost` — used only by the
+  extension's background worker to reach the loopback listener. It is not page
+  access and grants no ability to contact any other site.
 - `storage`, `unlimitedStorage` — to queue comments (including screenshots)
   locally until your assistant's server is reachable.
 - `alarms` — to periodically flush the local queue.
-- `debugger` (optional) — requested only if you enable Precise mode, and used
-  only to read the matched CSS rule for an element on your local page.
 
 ## Contact
 

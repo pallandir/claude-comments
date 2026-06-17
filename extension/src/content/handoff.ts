@@ -20,8 +20,7 @@ export function buildHandoffMarkdown(requests: QueuedRequest[]): string {
     lines.push(`## ${i + 1}. ${kindLabel(r)} · ${routeOf(r.url)}`, "");
     if (r.text) lines.push(`> ${r.text}`, "");
     for (const change of r.styleChanges ?? []) {
-      const at = change.cssSource ? ` (\`${change.cssSource.file}:${change.cssSource.line}\`)` : "";
-      lines.push(`- \`${change.property}\`: \`${change.from}\` → \`${change.to}\`${at}`);
+      lines.push(`- \`${change.property}\`: \`${change.from}\` → \`${change.to}\``);
     }
     if (r.textChange) lines.push(`- text: "${r.textChange.from}" → "${r.textChange.to}"`);
     if (r.source) {

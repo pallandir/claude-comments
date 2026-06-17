@@ -1,5 +1,5 @@
+import contentScript from "./content/content.ts?script";
 import { captureRegion } from "./lib/capture.js";
-import { resolveStyleSource } from "./lib/cdp.js";
 import {
   clearAll,
   clearForUrl,
@@ -17,11 +17,6 @@ import type { Message, PinModel, Response } from "./messages.js";
 
 const FLUSH_ALARM = "redline-flush";
 const ACTIVE_KEY = "cc-active";
-const DEBUGGER_PERMISSION: chrome.permissions.Permissions = { permissions: ["debugger"] };
-
-function hasDebugger(): Promise<boolean> {
-  return chrome.permissions.contains(DEBUGGER_PERMISSION);
-}
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: 1 });
@@ -35,12 +30,29 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.action.onClicked.addListener(async (tab) => {
   if (tab.id === undefined) return;
   const next = !(await isActive(tab.id));
+
+  if (next && !(await injectOverlay(tab.id))) return;
+
   await setActive(tab.id, next);
   await chrome.action.setBadgeText({ tabId: tab.id, text: next ? "ON" : "" });
   chrome.tabs
     .sendMessage(tab.id, { type: "set-active", on: next } satisfies Message)
     .catch(() => {});
 });
+
+// The overlay is injected only here, into the one tab the user just clicked, under
+// the activeTab grant. The content script guards against re-injection, so toggling
+// off then on without a reload is safe. Restricted pages (chrome://, the Web
+// Store, view-source) reject injection; we report that and stay off.
+async function injectOverlay(tabId: number): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: [contentScript] });
+    return true;
+  } catch {
+    await chrome.action.setBadgeText({ tabId, text: "n/a" });
+    return false;
+  }
+}
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void setActive(tabId, false);
@@ -61,23 +73,6 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 
 async function handle(message: Message, sender: chrome.runtime.MessageSender): Promise<Response> {
   switch (message.type) {
-    case "precise-status":
-      return { ok: true, granted: await hasDebugger() };
-    case "open-settings":
-      await chrome.runtime.openOptionsPage();
-      return { ok: true };
-    case "resolve-style-source": {
-      const tabId = sender.tab?.id;
-      if (tabId === undefined || !(await hasDebugger())) return { ok: true, cssSource: null };
-      try {
-        return {
-          ok: true,
-          cssSource: await resolveStyleSource(tabId, message.selector, message.property),
-        };
-      } catch {
-        return { ok: true, cssSource: null };
-      }
-    }
     case "capture-region": {
       try {
         const dataUrl = await captureRegion(sender.tab?.windowId, message.rect, message.dpr);

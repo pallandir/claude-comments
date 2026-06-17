@@ -3,12 +3,12 @@
 <br />
 <div align="center">
   <a href="#">
-    <img src="./public-assets/logo.png" alt="Logo" width="280" height="280">
+    <img src="./public-assets/redline.png" alt="Logo" width="280" height="280">
   </a>
   <h3 align="center">Redline</h3>
 
   <p align="center">
-    Leave real-time comments on any local interface and let your AI coding
+    Leave real-time comments on any interface and let your local AI coding
     assistant act on them.
     <br />
     <br />
@@ -42,9 +42,11 @@ mkdir -p .claude/skills && cp -r ./skills/comments .claude/skills/
 #    chrome://extensions -> enable Developer mode -> Load unpacked -> select extension/dist
 ```
 
-Now open a `localhost` frontend, click the Redline toolbar icon, leave comments,
-hit **Send**, and run `/comments` in Claude Code (or have your assistant call the
-`list_comments` MCP tool).
+Now open any frontend, a `localhost` dev server or a remote preview, click the
+Redline toolbar icon, leave comments, hit **Send**, and run `/comments` in Claude
+Code (or have your assistant call the `list_comments` MCP tool). Clicking the icon
+is what grants Redline access to that one tab; it has no access to any page until
+you do.
 
 > [!NOTE]
 > Redline works with any MCP-capable AI coding assistant. It has been **tested
@@ -56,11 +58,12 @@ hit **Send**, and run `/comments` in Claude Code (or have your assistant call th
 ## About This Project
 
 **Redline** is a Chromium (Manifest V3) extension paired with an MCP server that
-lets you click any element on a locally running frontend, leave a comment
-anchored to it, and have your **AI coding assistant** pick up the list and plan a
-revamp against your real source files. Because the server speaks standard MCP, it
-works with any MCP-capable assistant; it has been tested with **Claude Code**. It
-includes:
+lets you click any element on a running frontend, local or a remote preview,
+leave a comment anchored to it, and have your **AI coding assistant** pick up the
+list and plan a revamp against your real source files. The comments only ever
+travel to a listener on your own machine, never to a remote backend. Because the
+server speaks standard MCP, it works with any MCP-capable assistant; it has been
+tested with **Claude Code**. It includes:
 
 - **Browser extension**, a Figma-style dev toolbar to **select**, **comment**,
   recolor **text/background** live, and edit **copy** inline, with each item
@@ -77,7 +80,7 @@ includes:
 
 ### Why Redline
 
-The usual loop for design feedback on a local app is to take a screenshot,
+The usual loop for design feedback on a running app is to take a screenshot,
 describe the element by hand, and paste it into chat. Redline replaces that with
 structured, element-anchored comments that carry a stable selector, the visible
 text, key computed styles, a cropped screenshot, and, when available, a precise
@@ -147,9 +150,12 @@ run a local build, open `chrome://extensions`, enable Developer mode, choose
 
 ## How To Use It
 
-1. Run your frontend on `localhost` and open your AI coding assistant in the same
-   repo (the MCP server must be registered there).
-2. Click the **Redline** toolbar icon to activate it on the page. A draggable
+1. Run your frontend (a `localhost` dev server or a remote preview) and open your
+   AI coding assistant in the repo whose source you want to edit (the MCP server
+   must be registered there).
+2. Click the **Redline** toolbar icon to activate it on the current tab. This is
+   what grants access to that one tab; the extension touches no page until you
+   click, and the access is dropped when the tab navigates. A draggable
    Figma-style toolbar appears.
 3. Pick a tool: **Select** to inspect an element, **Comment** to leave a note,
    **Color** to change text or background live, **Text** to edit copy inline.
@@ -167,10 +173,6 @@ enough to trigger a fresh plan on the next poll:
 ```sh
 /loop /comments
 ```
-
-Optional: toggle **Precise** to map color edits to the exact CSS rule and file
-via the Chrome debugger. The first time you enable it, Redline asks for a
-one-time `debugger` permission grant (it is not requested at install time).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -191,8 +193,11 @@ port is not yet available.
 ## Security & privacy
 
 Everything stays on your machine: the server binds to `127.0.0.1` only, the
-extension runs only on localhost, and the listener rejects requests from web
-pages. See [SECURITY.md](./SECURITY.md) for the threat model and
+extension's only network access is that loopback listener, and the listener
+rejects requests from web pages. You can comment on any site, but the extension
+has no standing access to any page; it is injected into a tab only when you click
+to activate it (`activeTab`), and that access ends on navigation. See
+[SECURITY.md](./SECURITY.md) for the threat model and
 [PRIVACY.md](./PRIVACY.md) for data handling.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

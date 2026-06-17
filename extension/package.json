@@ -1,7 +1,7 @@
 {
   "name": "@redline/extension",
   "version": "1.0.0",
-  "description": "Chromium MV3 extension to leave real-time comments on any local interface for AI coding assistants.",
+  "description": "Chromium MV3 extension to leave real-time comments on any interface and route them to a local AI coding assistant.",
   "license": "SEE LICENSE IN LICENSE.md",
   "private": true,
   "type": "module",
@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@crxjs/vite-plugin": "^2.6.1",
     "@types/chrome": "^0.0.287",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "vite": "^8.0.16"
   }
 }

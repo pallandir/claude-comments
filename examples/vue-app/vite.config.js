@@ -6,6 +6,5 @@ export default defineConfig({
   plugins: [vue(), Inspector({ cleanHtml: false })],
   server: {
     port: 3002,
-    strictPort: true,
   },
 });

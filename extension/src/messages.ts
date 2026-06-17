@@ -14,7 +14,6 @@ export interface PinModel {
 export type Message =
   | { type: "set-active"; on: boolean }
   | { type: "capture-region"; rect: Rect; dpr: number }
-  | { type: "resolve-style-source"; selector: string; property: string }
   | { type: "save-request"; draft: DraftRequest }
   | { type: "page-comments"; url: string }
   | { type: "get-comments"; url: string }
@@ -24,9 +23,7 @@ export type Message =
   | { type: "count-all" }
   | { type: "update-comment"; cid: string; text: string }
   | { type: "flush" }
-  | { type: "queue-status" }
-  | { type: "precise-status" }
-  | { type: "open-settings" };
+  | { type: "queue-status" };
 
 export interface QueueStatus {
   queued: number;
@@ -43,7 +40,5 @@ export type Response =
       pins?: PinModel[];
       comments?: QueuedRequest[];
       count?: number;
-      cssSource?: { file: string; line: number } | null;
-      granted?: boolean;
     }
   | { ok: false; error: string };

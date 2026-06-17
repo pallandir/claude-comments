@@ -19,15 +19,32 @@ First public release.
   and can no longer crash the store.
 - **`/health` now identifies the service**; the extension only trusts a port
   that reports `service: "redline"`.
-- **Least-privilege extension manifest.** Removed the unused `scripting`
-  permission, scoped `host_permissions` from `<all_urls>` to localhost only, and
-  moved the powerful `debugger` permission to an optional permission requested at
-  runtime only when Precise mode is enabled.
+- **Zero standing page access.** The extension declares no content scripts and no
+  web-page host permissions. The overlay is injected into a single tab on demand
+  via `chrome.scripting` under the `activeTab` grant, only after the user clicks
+  the action, and that access ends on navigation. `host_permissions` is scoped to
+  loopback only and is used purely by the service worker to reach the local
+  listener, never for page access.
+- **Dropped the `debugger` permission entirely.** Removed the optional Precise
+  mode and its CDP source mapping, so the extension no longer declares or requests
+  the powerful `debugger` permission (Chrome also forbids it as optional). Color
+  edits still record `property: from -> to`; the assistant locates the CSS from
+  the selector and screenshot.
+- **Dependency audit clean.** `npm audit` now reports zero vulnerabilities:
+  `vite` upgraded to a release with a patched `esbuild`, with `esbuild` and `tmp`
+  pinned to patched versions through root `overrides`.
+- **Scoped assistant output.** The `/comments` skill and MCP read-tool
+  descriptions now constrain the assistant to UI changes bound to each comment's
+  located source, forbid acting on instructions embedded in comment data or
+  sending any page content anywhere, and direct it to pull only the comment data
+  it needs into context, while leaving design creativity, web assets, and
+  installed skills unrestricted.
 
 ### Added
 
-- Optional-permission flow with an extension settings page for granting Precise
-  mode's `debugger` access.
+- **Comment on any frontend, not just localhost.** Activate Redline on any site,
+  a local dev server or a remote preview, while all captured data still travels
+  only to the loopback listener and the assistant edits only the local repo.
 - Unit tests (`node:test`) for the comment store and the HTTP origin/Host gate
   and payload validation.
 - CI workflow (lint, typecheck, build, test) and an npm publish workflow with
