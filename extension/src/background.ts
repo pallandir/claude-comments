@@ -1,3 +1,4 @@
+import { captureRegion } from "./lib/capture.js";
 import { resolveStyleSource } from "./lib/cdp.js";
 import {
   clearAll,
@@ -69,10 +70,10 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     }
     case "capture-region": {
       try {
-        const { captureRegion } = await import("./lib/capture.js");
         const dataUrl = await captureRegion(sender.tab?.windowId, message.rect, message.dpr);
         return { ok: true, dataUrl };
-      } catch {
+      } catch (err) {
+        console.warn("[claude-comments] capture failed:", (err as Error).message);
         return { ok: true, dataUrl: null };
       }
     }
