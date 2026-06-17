@@ -17,6 +17,11 @@ import type { Message, PinModel, Response } from "./messages.js";
 
 const FLUSH_ALARM = "redline-flush";
 const ACTIVE_KEY = "cc-active";
+const DEBUGGER_PERMISSION: chrome.permissions.Permissions = { permissions: ["debugger"] };
+
+function hasDebugger(): Promise<boolean> {
+  return chrome.permissions.contains(DEBUGGER_PERMISSION);
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: 1 });
@@ -56,9 +61,14 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 
 async function handle(message: Message, sender: chrome.runtime.MessageSender): Promise<Response> {
   switch (message.type) {
+    case "precise-status":
+      return { ok: true, granted: await hasDebugger() };
+    case "open-settings":
+      await chrome.runtime.openOptionsPage();
+      return { ok: true };
     case "resolve-style-source": {
       const tabId = sender.tab?.id;
-      if (tabId === undefined) return { ok: true, cssSource: null };
+      if (tabId === undefined || !(await hasDebugger())) return { ok: true, cssSource: null };
       try {
         return {
           ok: true,

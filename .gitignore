@@ -9,6 +9,11 @@ build/
 *.tsbuildinfo
 .vite/
 
+# Packaged release artifacts
+*.mcpb
+redline-extension*.zip
+mcp-server/.mcpb-stage/
+
 # Husky internals
 .husky/_/
 
@@ -49,4 +54,4 @@ AGENTS.md
 .mcp.json
 *.local.md
 DESIGN.md
-
+.playwright-mcp/

@@ -92,7 +92,9 @@ async function findPort(): Promise<number | null> {
   for (const port of PORTS) {
     try {
       const res = await fetch(`http://127.0.0.1:${port}/health`, { method: "GET" });
-      if (res.ok) return port;
+      if (!res.ok) continue;
+      const body = (await res.json()) as { ok?: boolean; service?: string };
+      if (body.service === "redline") return port;
     } catch {
       // try next port
     }

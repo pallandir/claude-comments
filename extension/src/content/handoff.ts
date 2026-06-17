@@ -12,7 +12,7 @@ export function buildHandoffMarkdown(requests: QueuedRequest[]): string {
     "",
     "# Design handoff",
     "",
-    "Each item below is a requested change with where to find it. Hand to a developer or paste into Claude Code.",
+    "Each item below is a requested change with where to find it. Hand to a developer or paste into your AI coding assistant.",
     "",
   ];
 

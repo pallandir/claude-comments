@@ -1,17 +1,30 @@
 # @redline/mcp-server
 
-MCP server that ingests UI comments from the Redline extension and
-exposes them to Claude Code.
+MCP server that ingests real-time UI comments from the Redline extension and
+exposes them to your AI coding assistant. It speaks standard MCP, so it works
+with any MCP-capable client; it has been tested with Claude Code.
 
 It does two things in one process:
 
-- Speaks MCP over stdio to Claude Code (spawned automatically per session).
+- Speaks MCP over stdio to your assistant (spawned automatically per session).
 - Opens a localhost HTTP listener (7474, then 7475/7476) the browser extension
-  posts comments to.
+  posts comments to. The listener binds to `127.0.0.1` only and accepts requests
+  solely from the extension (web-page origins and non-loopback hosts are
+  rejected); payloads are validated against a strict schema.
 
 Comments are stored in `.claude/design-comments.md` and screenshots in
 `.claude/design-shots/`, relative to the working directory it is launched from.
 Both are gitignored.
+
+## Install
+
+```bash
+# Register from npm (no clone needed), e.g. with Claude Code:
+claude mcp add redline -- npx -y @redline/mcp-server
+
+# Or build a one-click bundle for Claude Desktop / MCP-bundle clients:
+npm run pack:mcpb        # produces ../redline.mcpb
+```
 
 ## Tools
 
@@ -26,7 +39,7 @@ Both are gitignored.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Port discovery probe. |
+| `GET` | `/health` | Port discovery probe; returns `{ ok, service: "redline" }` so the extension only trusts a Redline server. |
 | `GET` | `/comments` | List stored comments (lets the extension show synced pins). |
 | `POST` | `/comments` | Ingest a new comment from the extension. |
 | `DELETE` | `/comments?url=<page>` | Delete stored comments for a page (omit `url` to clear all). |

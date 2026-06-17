@@ -24,7 +24,9 @@ export type Message =
   | { type: "count-all" }
   | { type: "update-comment"; cid: string; text: string }
   | { type: "flush" }
-  | { type: "queue-status" };
+  | { type: "queue-status" }
+  | { type: "precise-status" }
+  | { type: "open-settings" };
 
 export interface QueueStatus {
   queued: number;
@@ -42,5 +44,6 @@ export type Response =
       comments?: QueuedRequest[];
       count?: number;
       cssSource?: { file: string; line: number } | null;
+      granted?: boolean;
     }
   | { ok: false; error: string };

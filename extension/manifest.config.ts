@@ -1,15 +1,21 @@
 import { defineManifest } from "@crxjs/vite-plugin";
 
-const LOCAL_MATCHES = ["http://localhost/*", "http://127.0.0.1/*"];
+const LOCAL_MATCHES = ["http://localhost/*", "http://127.0.0.1/*", "http://*.localhost/*"];
 
 export default defineManifest({
   manifest_version: 3,
   name: "Redline",
-  version: "0.1.0",
+  version: "1.0.0",
   description:
-    "A Figma-style dev toolbar to comment on and tweak a local frontend for Claude Code.",
-  permissions: ["activeTab", "scripting", "storage", "unlimitedStorage", "alarms", "debugger"],
-  host_permissions: ["<all_urls>"],
+    "Leave real-time comments on any local interface and let your AI coding assistant act on them.",
+  homepage_url: "https://github.com/pallandir/redline",
+  permissions: ["activeTab", "storage", "unlimitedStorage", "alarms"],
+  optional_permissions: ["debugger"],
+  host_permissions: LOCAL_MATCHES,
+  options_ui: {
+    page: "src/options.html",
+    open_in_tab: true,
+  },
   icons: {
     "16": "icon-16.png",
     "32": "icon-32.png",

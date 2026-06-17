@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redline settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 40px;
+        display: flex;
+        justify-content: center;
+      }
+      main {
+        max-width: 560px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      p {
+        color: #666;
+        line-height: 1.5;
+      }
+      .card {
+        border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 20px;
+      }
+      button {
+        font: inherit;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: none;
+        background: #d97757;
+        color: #fff;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .status[data-granted="true"] {
+        color: #2e7d32;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Redline settings</h1>
+      <p>Redline keeps a minimal permission footprint. Precise CSS source mapping
+        is optional and needs one extra grant.</p>
+
+      <div class="card">
+        <h2 style="font-size: 16px; margin: 0 0 8px">Precise mode</h2>
+        <p>
+          Precise mode maps a style edit to the exact CSS rule and file using the
+          Chrome debugger. This requires the <code>debugger</code> permission,
+          which Redline only requests if you turn this on. It is used solely on
+          your local pages to read matched CSS rules; nothing is sent anywhere.
+        </p>
+        <button id="grant" type="button">Grant Precise-mode access</button>
+        <div class="status" id="status">Checking…</div>
+      </div>
+    </main>
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>

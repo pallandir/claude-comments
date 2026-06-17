@@ -1,13 +1,14 @@
 {
   "name": "@redline/extension",
-  "version": "0.1.0",
-  "description": "Chromium MV3 extension to leave right-click comments on a local frontend.",
+  "version": "1.0.0",
+  "description": "Chromium MV3 extension to leave real-time comments on any local interface for AI coding assistants.",
   "license": "SEE LICENSE IN LICENSE.md",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "package": "vite build && cd dist && zip -qr -FS ../redline-extension.zip . && cd ..",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

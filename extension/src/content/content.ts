@@ -157,8 +157,24 @@ function toggleDrawer(): void {
   render();
 }
 
-function onTogglePrecise(): void {
-  precise = !precise;
+async function onTogglePrecise(): Promise<void> {
+  if (precise) {
+    precise = false;
+    render();
+    return;
+  }
+  const res = await send({ type: "precise-status" });
+  if (res.ok && res.granted) {
+    precise = true;
+  } else {
+    await send({ type: "open-settings" });
+    surface.showModal({
+      title: "Precise mode needs one-time access",
+      body: "Precise CSS source mapping uses the Chrome debugger. Grant access in the settings tab that just opened, then toggle Precise again.",
+      actions: [{ label: "Got it", variant: "ghost", onClick: () => {} }],
+      onDismiss: () => {},
+    });
+  }
   render();
 }
 

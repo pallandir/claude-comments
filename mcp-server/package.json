@@ -1,26 +1,55 @@
 {
   "name": "@redline/mcp-server",
-  "version": "0.1.0",
-  "description": "MCP server that ingests UI comments from the Redline extension and exposes them to Claude Code.",
+  "version": "1.0.0",
+  "description": "MCP server that ingests real-time UI comments from the Redline extension and exposes them to an AI coding assistant.",
   "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
+  "homepage": "https://github.com/pallandir/redline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pallandir/redline.git",
+    "directory": "mcp-server"
+  },
+  "bugs": {
+    "url": "https://github.com/pallandir/redline/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "ai-coding-assistant",
+    "ui-feedback",
+    "design-review"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "redline-mcp": "dist/index.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "manifest.json", "LICENSE.md", "README.md"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/store.test.ts src/http.test.ts",
+    "pack:mcpb": "node scripts/pack-mcpb.mjs",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2",
     "@types/node": "^22.10.5",
     "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
 }

@@ -1,0 +1,60 @@
+{
+  "manifest_version": "0.3",
+  "name": "redline",
+  "display_name": "Redline",
+  "version": "1.0.0",
+  "description": "Ingests real-time UI comments from the Redline browser extension and exposes them to your AI coding assistant.",
+  "author": {
+    "name": "pallandir",
+    "url": "https://github.com/pallandir"
+  },
+  "homepage": "https://github.com/pallandir/redline",
+  "documentation": "https://github.com/pallandir/redline#readme",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "REDLINE_ROOT": "${user_config.root}",
+        "REDLINE_PORT": "${user_config.port}"
+      }
+    }
+  },
+  "user_config": {
+    "root": {
+      "type": "directory",
+      "title": "Project directory",
+      "description": "The repository to write comments into (.claude/design-comments.md and screenshots land here).",
+      "required": true
+    },
+    "port": {
+      "type": "number",
+      "title": "Ingest port",
+      "description": "Localhost port the browser extension posts to. Falls back to 7475/7476 if taken.",
+      "default": 7474,
+      "min": 1024,
+      "max": 65535,
+      "required": false
+    }
+  },
+  "tools": [
+    { "name": "list_comments", "description": "List UI comments, optionally filtered by status." },
+    {
+      "name": "get_comment",
+      "description": "Get one comment with its source hint and screenshot path."
+    },
+    {
+      "name": "resolve_comment",
+      "description": "Set a comment's status to open, resolved, or wontfix."
+    },
+    { "name": "clear_resolved", "description": "Remove every comment that is not open." }
+  ],
+  "compatibility": {
+    "runtimes": {
+      "node": ">=20"
+    }
+  }
+}

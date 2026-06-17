@@ -1,9 +1,9 @@
 {
   "name": "redline",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Right-click comments on any local frontend, picked up by Claude Code through an MCP server.",
+  "description": "Leave real-time comments on any local interface and let your AI coding assistant act on them.",
   "license": "SEE LICENSE IN LICENSE.md",
   "workspaces": ["extension", "mcp-server"],
   "engines": {
@@ -12,6 +12,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "dev": "npm run dev --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "biome check .",
     "format": "biome format --write .",

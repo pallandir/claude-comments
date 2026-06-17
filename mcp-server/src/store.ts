@@ -134,10 +134,12 @@ function serialize(comments: Comment[]): string {
         `- source: ${c.source.path}:${c.source.line}:${c.source.column} (${c.source.via})`,
       );
     }
+    const viewport = c.viewport ?? { w: 0, h: 0 };
+    const fingerprint = c.fingerprint ?? { selector: "", innerText: "" };
     lines.push(
-      `- selector: ${c.fingerprint.selector}`,
-      `- text: ${JSON.stringify(c.fingerprint.innerText)}`,
-      `- viewport: ${c.viewport.w}x${c.viewport.h}`,
+      `- selector: ${fingerprint.selector ?? ""}`,
+      `- text: ${JSON.stringify(fingerprint.innerText ?? "")}`,
+      `- viewport: ${viewport.w}x${viewport.h}`,
       `- url: ${c.url}`,
       `- created: ${c.createdAt}`,
     );
