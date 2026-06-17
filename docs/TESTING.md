@@ -10,7 +10,7 @@ a real Chrome with the extension loaded (native right-click menu,
 ```bash
 # from the repo root
 npm install
-npm run build --workspace @claude-comments/extension   # produces extension/dist
+npm run build --workspace @redline/extension   # produces extension/dist
 ```
 
 Start the example apps (two terminals, or use the ones already running):
@@ -25,7 +25,7 @@ cd examples/vue-app   && npm install && npm run dev   # http://localhost:3002
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top right).
 3. Click **Load unpacked** and select the `extension/dist` folder.
-4. You should see "Claude Comments" appear with no errors.
+4. You should see "Redline" appear with no errors.
 
 Important: after every rebuild of the extension, click the **reload** icon on the
 extension card, then **refresh** any open localhost tab so the new content script
@@ -38,7 +38,7 @@ extension icon, and the toolbar only runs on `http://localhost/*` and
 `http://127.0.0.1/*` pages.
 
 1. Open `http://localhost:3001` (the React app).
-2. Click the **Claude Comments** toolbar icon. The icon badge shows **ON** and a
+2. Click the **Redline** toolbar icon. The icon badge shows **ON** and a
    draggable toolbar appears bottom-right. Click again to turn it off.
 3. Drag the toolbar by its header to reposition it (the position is remembered).
 
@@ -73,9 +73,9 @@ debugging this tab" banner while it resolves; it clears right after.
 ## 4. Pickup with the MCP server
 
 ```bash
-npm run build --workspace @claude-comments/mcp-server
+npm run build --workspace @redline/mcp-server
 # register once, then open Claude Code in the repo you are commenting on:
-claude mcp add claude-comments -- node ./mcp-server/dist/index.js
+claude mcp add redline -- node ./mcp-server/dist/index.js
 ```
 
 With a Claude Code session open (it spawns the server), click **⤴ Send to Claude**
