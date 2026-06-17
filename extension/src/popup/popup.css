@@ -1,0 +1,40 @@
+body {
+  margin: 0;
+  width: 260px;
+  font-family: system-ui, sans-serif;
+  background: #1f1f1f;
+  color: #f5f5f5;
+}
+
+main {
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+#status {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #c9c9c9;
+  line-height: 1.4;
+}
+
+button {
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #d97757;
+  color: #1a1a1a;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

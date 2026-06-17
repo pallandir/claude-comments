@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnp.*
+.yarn/*
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+.vite/
+
+# Husky internals
+.husky/_/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env / local
+.env
+.env.*
+!.env.example
+*.local
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Claude / AI assistant files and directories
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.claudesync/
+.anthropic/
+.cursor/
+.cursorrules
+.cursorignore
+.aider*
+.continue/
+.windsurf/
+.windsurfrules
+.codeium/
+.github/copilot-instructions.md
+AGENTS.md
+.mcp.json
+*.local.md
+DESIGN.md
