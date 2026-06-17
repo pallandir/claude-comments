@@ -37,6 +37,20 @@ Claude Code spawns it automatically each session. It opens a localhost listener
 on port 7474 (falling back to 7475/7476) for the extension, and writes comments
 to `.claude/design-comments.md`.
 
+## Install the /comments skill
+
+The pickup flow ships as a Claude Code skill in `skills/comments`. Install it into
+the project you want to review (or globally):
+
+```bash
+mkdir -p .claude/skills && cp -r skills/comments .claude/skills/   # per project
+# or: mkdir -p ~/.claude/skills && cp -r skills/comments ~/.claude/skills/
+```
+
+Then run `/comments` in Claude Code: it reads the comments (via the MCP tools,
+falling back to `.claude/design-comments.md`), views the screenshots, proposes a
+revamp plan, applies it on approval, and marks each comment resolved.
+
 ## Install the extension
 
 ```bash

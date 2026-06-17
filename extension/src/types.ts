@@ -5,11 +5,18 @@ export interface SourceLocation {
   via: string;
 }
 
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface Fingerprint {
   selector: string;
   innerText: string;
   styles: Record<string, string>;
-  rect: { x: number; y: number; w: number; h: number };
+  rect: Rect;
 }
 
 export interface DraftComment {
@@ -22,5 +29,6 @@ export interface DraftComment {
 }
 
 export interface QueuedComment extends DraftComment {
+  cid: string;
   queuedAt: number;
 }

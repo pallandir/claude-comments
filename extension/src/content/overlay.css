@@ -2,6 +2,26 @@
   all: initial;
 }
 
+.cc-highlight {
+  position: absolute;
+  z-index: 2147483645;
+  pointer-events: none;
+  border: 2px solid #d97757;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.25);
+}
+
+.cc-pin-wrap {
+  position: absolute;
+  width: 0;
+  height: 0;
+  z-index: 2147483646;
+}
+
+.cc-pin-wrap--removable {
+  cursor: pointer;
+}
+
 .cc-pin {
   position: absolute;
   width: 14px;
@@ -11,7 +31,36 @@
   background: #d97757;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
   transform: rotate(-45deg);
-  z-index: 2147483646;
+}
+
+.cc-pin-wrap--resolved .cc-pin {
+  background: #5a9e6f;
+}
+
+.cc-pin-wrap--wontfix .cc-pin {
+  background: #777;
+}
+
+.cc-tip {
+  position: absolute;
+  left: 12px;
+  top: -8px;
+  max-width: 240px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #1f1f1f;
+  color: #f5f5f5;
+  font: 13px / 1.4 system-ui, sans-serif;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.1s ease;
+  pointer-events: none;
+}
+
+.cc-pin-wrap:hover .cc-tip {
+  opacity: 1;
+  visibility: visible;
 }
 
 .cc-panel {
@@ -38,6 +87,12 @@
   background: #161616;
   color: inherit;
   font: inherit;
+}
+
+.cc-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #9a9a9a;
 }
 
 .cc-actions {

@@ -7,7 +7,7 @@ export default defineManifest({
   name: "Claude Comments",
   version: "0.1.0",
   description: "Right-click comments on a local frontend, picked up by Claude Code.",
-  permissions: ["contextMenus", "activeTab", "scripting", "storage", "alarms"],
+  permissions: ["contextMenus", "activeTab", "scripting", "storage", "unlimitedStorage", "alarms"],
   host_permissions: LOCAL_MATCHES,
   background: {
     service_worker: "src/background.ts",

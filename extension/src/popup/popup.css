@@ -1,6 +1,6 @@
 body {
   margin: 0;
-  width: 260px;
+  width: 300px;
   font-family: system-ui, sans-serif;
   background: #1f1f1f;
   color: #f5f5f5;
@@ -16,13 +16,81 @@ h1 {
 }
 
 #status {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-size: 13px;
   color: #c9c9c9;
   line-height: 1.4;
 }
 
-button {
+#list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+#list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid #2e2e2e;
+  font-size: 13px;
+}
+
+.cc-empty {
+  color: #8a8a8a;
+  border-top: 0 !important;
+}
+
+.cc-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: #3a3a3a;
+  color: #f5f5f5;
+}
+
+.cc-badge--pending {
+  background: #d97757;
+  color: #1a1a1a;
+}
+
+.cc-badge--resolved {
+  background: #5a9e6f;
+  color: #102016;
+}
+
+.cc-badge--wontfix {
+  background: #555;
+}
+
+.cc-text {
+  flex: 1;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.cc-remove {
+  flex: none;
+  width: 22px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #9a9a9a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cc-remove:hover {
+  background: #333;
+  color: #f5f5f5;
+}
+
+#flush {
   width: 100%;
   padding: 8px;
   border: 0;
@@ -34,7 +102,7 @@ button {
   cursor: pointer;
 }
 
-button:disabled {
+#flush:disabled {
   opacity: 0.6;
   cursor: default;
 }

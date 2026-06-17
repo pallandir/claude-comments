@@ -1,10 +1,11 @@
 import { captureFingerprint } from "../lib/fingerprint.js";
 import { resolveSource } from "../lib/source-map.js";
-import type { Message } from "../messages.js";
-import type { DraftComment } from "../types.js";
-import overlayCss from "./overlay.css?inline";
+import type { Message, Response } from "../messages.js";
+import type { DraftComment, Rect } from "../types.js";
+import { Overlay } from "./overlay.js";
 
 let lastTarget: Element | null = null;
+const overlay = new Overlay();
 
 document.addEventListener(
   "contextmenu",
@@ -15,74 +16,57 @@ document.addEventListener(
 );
 
 chrome.runtime.onMessage.addListener((message: Message) => {
-  if (message.type === "compose-here" && lastTarget) {
-    openComposer(lastTarget);
-  }
+  if (message.type === "compose-here" && lastTarget) void openComposer(lastTarget);
 });
 
-const host = document.createElement("div");
-host.id = "claude-comments-root";
-const shadow = host.attachShadow({ mode: "open" });
-const style = document.createElement("style");
-style.textContent = overlayCss;
-shadow.append(style);
-
-function ensureMounted(): void {
-  if (!host.isConnected) document.documentElement.append(host);
+function send(message: Message): Promise<Response> {
+  return chrome.runtime.sendMessage(message);
 }
 
-function openComposer(target: Element): void {
-  ensureMounted();
-  const rect = target.getBoundingClientRect();
+async function openComposer(target: Element): Promise<void> {
+  const r = target.getBoundingClientRect();
+  const rect: Rect = { x: r.x, y: r.y, w: r.width, h: r.height };
 
-  const pin = document.createElement("div");
-  pin.className = "cc-pin";
-  pin.style.left = `${rect.left + window.scrollX}px`;
-  pin.style.top = `${rect.top + window.scrollY}px`;
+  overlay.setHidden(true);
+  await nextPaint();
+  const screenshot = await captureRegion(rect);
+  overlay.setHidden(false);
 
-  const panel = document.createElement("div");
-  panel.className = "cc-panel";
-  panel.style.left = `${rect.left + window.scrollX}px`;
-  panel.style.top = `${rect.bottom + window.scrollY + 8}px`;
-
-  const textarea = document.createElement("textarea");
-  textarea.placeholder = "What should Claude change here?";
-
-  const actions = document.createElement("div");
-  actions.className = "cc-actions";
-  const save = document.createElement("button");
-  save.textContent = "Save";
-  save.className = "cc-save";
-  const cancel = document.createElement("button");
-  cancel.textContent = "Cancel";
-
-  const teardown = () => {
-    pin.remove();
-    panel.remove();
-  };
-
-  cancel.addEventListener("click", teardown);
-  save.addEventListener("click", async () => {
-    const text = textarea.value.trim();
-    if (!text) return teardown();
-    await submit(target, text);
-    teardown();
-  });
-
-  actions.append(save, cancel);
-  panel.append(textarea, actions);
-  shadow.append(pin, panel);
-  textarea.focus();
+  overlay.showComposer(target, (text) => submit(target, text, screenshot));
 }
 
-async function submit(target: Element, text: string): Promise<void> {
+async function captureRegion(rect: Rect): Promise<string | null> {
+  const res = await send({ type: "capture-region", rect, dpr: window.devicePixelRatio });
+  return res.ok && res.dataUrl ? res.dataUrl : null;
+}
+
+async function submit(target: Element, text: string, screenshot: string | null): Promise<void> {
   const draft: DraftComment = {
     url: location.href,
     text,
     source: resolveSource(target),
     fingerprint: captureFingerprint(target),
-    screenshotDataUrl: null,
+    screenshotDataUrl: screenshot,
     viewport: { w: window.innerWidth, h: window.innerHeight },
   };
-  await chrome.runtime.sendMessage({ type: "save-comment", draft } satisfies Message);
+  await send({ type: "save-comment", draft });
+  await refreshPins();
 }
+
+async function refreshPins(): Promise<void> {
+  const res = await send({ type: "page-comments", url: location.href });
+  if (res.ok && res.pins) overlay.setPins(res.pins, (key) => void removePin(key));
+}
+
+async function removePin(cid: string): Promise<void> {
+  await send({ type: "remove-comment", cid });
+  await refreshPins();
+}
+
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+void refreshPins();

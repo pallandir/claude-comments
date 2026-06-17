@@ -1,8 +1,16 @@
-import type { QueueStatus } from "../messages.js";
+import type { PinStatus, QueueStatus } from "../messages.js";
 import type { DraftComment, QueuedComment } from "../types.js";
 
 const QUEUE_KEY = "claude-comments-queue";
 const PORTS = [7474, 7475, 7476];
+
+export interface ServerComment {
+  id: string;
+  url: string;
+  text: string;
+  status: PinStatus;
+  fingerprint: { selector: string };
+}
 
 async function getQueue(): Promise<QueuedComment[]> {
   const stored = await chrome.storage.local.get(QUEUE_KEY);
@@ -13,10 +21,20 @@ async function setQueue(queue: QueuedComment[]): Promise<void> {
   await chrome.storage.local.set({ [QUEUE_KEY]: queue });
 }
 
-export async function enqueue(draft: DraftComment): Promise<void> {
+export async function enqueue(draft: DraftComment): Promise<QueuedComment> {
   const queue = await getQueue();
-  queue.push({ ...draft, queuedAt: Date.now() });
+  const item: QueuedComment = { ...draft, cid: crypto.randomUUID(), queuedAt: Date.now() };
+  queue.push(item);
   await setQueue(queue);
+  return item;
+}
+
+export async function listForUrl(url: string): Promise<QueuedComment[]> {
+  return (await getQueue()).filter((c) => c.url === url);
+}
+
+export async function remove(cid: string): Promise<void> {
+  await setQueue((await getQueue()).filter((c) => c.cid !== cid));
 }
 
 async function findPort(): Promise<number | null> {
@@ -31,6 +49,19 @@ async function findPort(): Promise<number | null> {
   return null;
 }
 
+export async function fetchServerComments(url: string): Promise<ServerComment[]> {
+  const port = await findPort();
+  if (port === null) return [];
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/comments`);
+    if (!res.ok) return [];
+    const all = (await res.json()) as ServerComment[];
+    return all.filter((c) => c.url === url);
+  } catch {
+    return [];
+  }
+}
+
 export async function flush(): Promise<QueueStatus> {
   const port = await findPort();
   let queue = await getQueue();
@@ -41,7 +72,7 @@ export async function flush(): Promise<QueueStatus> {
   const remaining: QueuedComment[] = [];
   for (const item of queue) {
     try {
-      const { queuedAt: _queuedAt, ...draft } = item;
+      const { cid: _cid, queuedAt: _queuedAt, ...draft } = item;
       const res = await fetch(`http://127.0.0.1:${port}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

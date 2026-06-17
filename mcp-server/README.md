@@ -22,6 +22,14 @@ Both are gitignored.
 | `resolve_comment(id, status)` | Set `open` / `resolved` / `wontfix`. |
 | `clear_resolved()` | Remove every comment that is not open. |
 
+## HTTP endpoints (for the extension)
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Port discovery probe. |
+| `GET` | `/comments` | List stored comments (lets the extension show synced pins). |
+| `POST` | `/comments` | Ingest a new comment from the extension. |
+
 ## Env
 
 | Variable | Default | Meaning |

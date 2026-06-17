@@ -46,6 +46,11 @@ async function handle(
     return;
   }
 
+  if (req.method === "GET" && req.url?.startsWith("/comments")) {
+    json(res, 200, await store.list());
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/comments") {
     try {
       const body = await readBody(req);
