@@ -216,7 +216,7 @@ export class Surface {
 
   showComposer(
     target: Element,
-    onSubmit: (text: string) => Promise<void> | void,
+    onSubmit: (text: string, planFirst: boolean) => Promise<void> | void,
     onCancel?: () => void,
   ): void {
     this.mount();
@@ -233,6 +233,16 @@ export class Surface {
     const hint = document.createElement("div");
     hint.className = "cc-hint";
     hint.textContent = "⌘↵ to save · Esc to cancel";
+
+    const planToggle = document.createElement("label");
+    planToggle.className = "cc-plan-toggle";
+    const planCheckbox = document.createElement("input");
+    planCheckbox.type = "checkbox";
+    planCheckbox.className = "cc-plan-checkbox";
+    const planLabel = document.createElement("span");
+    planLabel.textContent = "Plan this first";
+    planToggle.append(planCheckbox, planLabel);
+
     const actions = document.createElement("div");
     actions.className = "cc-actions";
     const save = document.createElement("button");
@@ -251,7 +261,7 @@ export class Surface {
       const value = textarea.value.trim();
       if (!value) return dismiss();
       this.closeComposer();
-      await onSubmit(value);
+      await onSubmit(value, planCheckbox.checked);
     };
 
     cancel.addEventListener("click", dismiss);
@@ -267,7 +277,7 @@ export class Surface {
     });
 
     actions.append(save, cancel);
-    panel.append(textarea, hint, actions);
+    panel.append(textarea, planToggle, hint, actions);
     this.composerHighlight = highlight;
     this.composer = panel;
     this.shadow.append(highlight, panel);
@@ -302,7 +312,7 @@ export class Surface {
         });
       }
       this.shadow.append(wrap);
-      return { model, el: wrap, anchor: resolve(model.selector) };
+      return { model, el: wrap, anchor: resolve(model.operator) };
     });
     this.reposition();
     this.startTicker();
@@ -335,7 +345,7 @@ export class Surface {
 
   private reposition(): void {
     for (const pin of this.pins) {
-      if (!pin.anchor?.isConnected) pin.anchor = resolve(pin.model.selector);
+      if (!pin.anchor?.isConnected) pin.anchor = resolve(pin.model.operator);
       if (!pin.anchor) {
         pin.el.style.display = "none";
         continue;
@@ -389,9 +399,16 @@ function glyph(kind: PinModel["kind"]): string {
   return "";
 }
 
-function resolve(selector: string): Element | null {
+function resolve(xpath: string): Element | null {
   try {
-    return document.querySelector(selector);
+    const result = document.evaluate(
+      xpath,
+      document,
+      null,
+      XPathResult.FIRST_ORDERED_NODE_TYPE,
+      null,
+    );
+    return result.singleNodeValue as Element | null;
   } catch {
     return null;
   }

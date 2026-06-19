@@ -21,13 +21,13 @@
 ## TL;DR
 
 Redline ships three pieces: a **browser extension**, an **MCP server**, and a
-**/comments skill**. The MCP server and skill install together as a Claude Code
+**/redline skill**. The MCP server and skill install together as a Claude Code
 plugin; the extension installs from the Chrome Web Store. Nothing to clone or
 build:
 
 ```sh
 # 1. In Claude Code, add the marketplace and install the plugin. This registers
-#    the redline MCP server (run on demand via npx) and the /comments skill,
+#    the redline MCP server (run on demand via npx) and the /redline skill,
 #    with nothing to clone or build:
 /plugin marketplace add pallandir/redline
 /plugin install redline@redline
@@ -45,11 +45,12 @@ claude mcp add redline -- npx -y @redline/mcp-server
 ```
 
 Now open your frontend and click the Redline toolbar icon. On a `localhost` dev
-server, comments save into the project automatically as you leave them; run
-`/comments` in Claude Code to pick them up, or `/loop /comments` once to pick up
-every comment continuously. On a remote preview there is no local project, so use
-**Handoff** to export a Markdown report instead. Clicking the icon is what grants
-Redline access to that one tab; it has no access to any page until you do.
+server, comments save into the project automatically as you leave them. The
+toolbar shows a `/redline <id>` command — paste it into Claude Code to start
+watching and implementing comments continuously. On a remote preview there is no
+local project, so use **Handoff** to export a Markdown report instead. Clicking
+the icon is what grants Redline access to that one tab; it has no access to any
+page until you do.
 
 > [!NOTE]
 > Redline works with any MCP-capable AI coding assistant. It has been **tested
@@ -74,10 +75,12 @@ tested with **Claude Code**. It includes:
 - **MCP server** ([`@modelcontextprotocol`](https://modelcontextprotocol.io/)),
   a single process that speaks MCP to your assistant over stdio and opens a
   localhost listener the extension posts to. It exposes `list_comments`,
-  `get_comment`, `resolve_comment`, and `clear_resolved`.
-- **`/comments` skill** (Claude Code), the pickup flow that reads the comments,
-  views the screenshots, proposes a plan, and only applies edits once you
-  approve. Other assistants call the same MCP tools directly.
+  `get_comment`, `resolve_comment`, `clear_resolved`, `bind_session`,
+  `wait_for_update`, `defer_comment`, and `list_deferred`.
+- **`/redline` skill** (Claude Code), the pickup flow that binds a session,
+  watches for comments, and implements each batch directly via a sub-agent,
+  with no planning gate or approval step. Other assistants call the same MCP
+  tools directly.
 - **Framework-agnostic source mapping**, reading inspector attributes for React,
   Vue, and Svelte, with a DOM-fingerprint fallback when none are present.
 
@@ -99,7 +102,7 @@ the assistant's server is closed and drain automatically on the next session.
 
 ## Getting Started
 
-**Install the plugin (MCP server + `/comments` skill).** In Claude Code:
+**Install the plugin (MCP server + `/redline` skill).** In Claude Code:
 
 ```sh
 /plugin marketplace add pallandir/redline
@@ -107,7 +110,7 @@ the assistant's server is closed and drain automatically on the next session.
 ```
 
 This registers the redline MCP server, run on demand via `npx -y
-@redline/mcp-server` (published to npm, no clone), and the `/comments` skill. Your
+@redline/mcp-server` (published to npm, no clone), and the `/redline` skill. Your
 assistant spawns the server each session from the project root you are working
 in, so the comment store lands in that repo: a localhost listener on port 7474
 (falling back to 7475/7476), writing to `.claude/design-comments.md` with
@@ -122,8 +125,8 @@ claude mcp add redline -- npx -y @redline/mcp-server
 
 For Claude Desktop and other one-click clients, install the `redline.mcpb` bundle
 (built with `npm run pack:mcpb --workspace @redline/mcp-server`) and pick your
-project directory when prompted. Not using the plugin? The `/comments` skill
-lives in `plugin/skills/comments`; copy it into `.claude/skills/` (per project)
+project directory when prompted. Not using the plugin? The `/redline` skill
+lives in `plugin/skills/redline`; copy it into `.claude/skills/` (per project)
 or `~/.claude/skills/` (global).
 
 **Install the browser extension.** Coming soon to the Chrome Web Store. Until
@@ -158,17 +161,13 @@ npm run build --workspace @redline/extension
    create them. **Handoff** downloads a Markdown report (with frontmatter) for a
    developer or any AI assistant; use it on remote pages, where there is no local
    project to sync into.
-5. In Claude Code, run `/comments`; with any other MCP client, ask it to read the
-   comments via `list_comments`. It views the screenshots, proposes a plan, then
-   stops. It applies the changes and resolves each comment only after you approve,
-   from the toolbar (**Apply**) or in chat.
-
-For hands-off pickup, start the skill in a loop once so new comments trigger a
-fresh plan automatically, with no need to re-run `/comments`:
-
-```sh
-/loop /comments
-```
+5. The browser toolbar shows a `/redline <id>` command. Copy it and paste it into
+   Claude Code to start watching. Claude binds the session, then implements each
+   batch of comments directly via a sub-agent, no approval step. Comments that
+   need more thought (cross-cutting changes, new dependencies, anything you flag
+   "Plan this first") are parked in `.claude/redline-deferred.md` and a notice
+   appears in the toolbar. With any other MCP client, call `bind_session`,
+   `wait_for_update`, and `list_comments` directly.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -177,9 +176,10 @@ fresh plan automatically, with no need to re-run `/comments`:
 Redline's server speaks standard MCP over stdio, so it works with any MCP-capable
 AI coding assistant. It has been **tested with Claude Code**. Other clients
 (Cursor, Windsurf, and similar) should work but are currently unverified; the
-`/comments` skill and `claude mcp add`/`/loop` commands are Claude Code
-conveniences, while `list_comments`, `get_comment`, `resolve_comment`, and
-`clear_resolved` are plain MCP tools any client can call.
+`/redline` skill and `claude mcp add` commands are Claude Code conveniences,
+while `bind_session`, `wait_for_update`, `list_comments`, `get_comment`,
+`resolve_comment`, `defer_comment`, and `list_deferred` are plain MCP tools any
+client can call.
 
 The extension targets Chromium (Manifest V3): Chrome, Edge, Brave, Arc. A Firefox
 port is not yet available.

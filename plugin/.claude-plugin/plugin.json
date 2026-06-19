@@ -1,6 +1,6 @@
 {
   "name": "redline",
-  "description": "Pick up UI comments left through the Redline browser extension and turn them into planned, approved code changes.",
+  "description": "Pick up UI comments left through the Redline browser extension and implement them directly, parking anything that needs a plan.",
   "version": "1.0.0",
   "author": {
     "name": "pallandir",

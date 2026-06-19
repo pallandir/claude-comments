@@ -1,7 +1,7 @@
-import { captureFingerprint } from "../lib/fingerprint.js";
+import { captureElement } from "../lib/fingerprint.js";
 import { resolveSource } from "../lib/source-map.js";
 import type { Message, PinModel, QueueStatus, Response } from "../messages.js";
-import type { DraftRequest, Rect, RequestKind, StyleChange, TextChange } from "../types.js";
+import type { DraftRequest, Operation, Rect } from "../types.js";
 import { Drawer, type DrawerContext } from "./drawer.js";
 import { downloadHandoff } from "./handoff.js";
 import { Surface } from "./surface.js";
@@ -20,7 +20,6 @@ if (!window.__redlineLoaded) {
 }
 
 const STATUS_POLL_MS = 5000;
-const CHECK_TIMEOUT_MS = 4000;
 
 function pageMode(): Mode {
   const host = location.hostname;
@@ -37,7 +36,7 @@ function init(): void {
   let active = false;
   let interacting = false;
   let drawerOpen = false;
-  let checking = false;
+  let wasConnected = false;
   let lastPins: PinModel[] = [];
   let lastStatus: QueueStatus | null = null;
   let pollTimer: number | null = null;
@@ -67,9 +66,7 @@ function init(): void {
         onComments: toggleDrawer,
         onHandoff: handleHandoff,
         onReset: handleReset,
-        onReconnect: handleReconnect,
-        onApprove: (id) => void handleDecision(id, "approve"),
-        onReject: (id) => void handleDecision(id, "reject"),
+        onDismissNotice: (id) => void handleDismissNotice(id),
       });
       drawer = new Drawer(surface, {
         onEdit: (cid, text) => void editComment(cid, text),
@@ -90,7 +87,7 @@ function init(): void {
       drawer = null;
       interacting = false;
       drawerOpen = false;
-      checking = false;
+      wasConnected = false;
       surface.unmount();
     }
     updateCursor();
@@ -158,9 +155,13 @@ function init(): void {
     if (which === "comment") {
       surface.showComposer(
         el,
-        async (text) => {
+        async (commentText, planFirst) => {
           done();
-          await record("comment", el, { text });
+          await record(el, {
+            comment: commentText,
+            operation: { type: "comment", property: null, from: null, to: null },
+            planFirst,
+          });
         },
         done,
       );
@@ -168,9 +169,9 @@ function init(): void {
       openColorPanel(
         surface,
         el as HTMLElement,
-        (changes, summary) => {
+        (operation, summary) => {
           done();
-          void record("style", el, { text: summary, styleChanges: changes });
+          void record(el, { comment: summary, operation });
         },
         done,
       );
@@ -180,8 +181,11 @@ function init(): void {
         el as HTMLElement,
         (from, to) => {
           done();
-          const text = from ? `Change text from "${from}" to "${to}"` : `Set text to "${to}"`;
-          void record("text", el, { text, textChange: { from, to } });
+          const comment = from ? `Change text from "${from}" to "${to}"` : `Set text to "${to}"`;
+          void record(el, {
+            comment,
+            operation: { type: "text", property: null, from, to },
+          });
         },
         done,
       );
@@ -197,20 +201,19 @@ function init(): void {
   function drawerCtx(): DrawerContext {
     return {
       mode,
-      connected: Boolean(lastStatus?.serverReachable) && !checking,
+      connected: Boolean(lastStatus?.serverReachable) && Boolean(lastStatus?.watching),
       watching: Boolean(lastStatus?.watching),
     };
   }
 
   interface RecordPayload {
-    text: string;
-    styleChanges?: StyleChange[];
-    textChange?: TextChange;
+    comment: string;
+    operation: Operation;
+    planFirst?: boolean;
   }
 
-  async function record(kind: RequestKind, el: Element, payload: RecordPayload): Promise<void> {
-    const fingerprint = captureFingerprint(el);
-    const styleChanges = payload.styleChanges;
+  async function record(el: Element, payload: RecordPayload): Promise<void> {
+    const { operator, elementText } = captureElement(el);
 
     const r = el.getBoundingClientRect();
     const rect: Rect = { x: r.x, y: r.y, w: r.width, h: r.height };
@@ -220,15 +223,18 @@ function init(): void {
     surface.setHidden(false);
 
     const draft: DraftRequest = {
-      kind,
+      comment: payload.comment,
+      operation: payload.operation,
+      operator,
       url: location.href,
-      text: payload.text,
-      styleChanges,
-      textChange: payload.textChange,
+      metadata: {
+        page: location.pathname,
+        viewport: { w: window.innerWidth, h: window.innerHeight },
+        elementText,
+      },
       source: resolveSource(el),
-      fingerprint,
       screenshotDataUrl: screenshot,
-      viewport: { w: window.innerWidth, h: window.innerHeight },
+      planFirst: payload.planFirst ?? false,
     };
     await send({ type: "save-request", draft });
     await refresh();
@@ -239,18 +245,9 @@ function init(): void {
     return res.ok && res.dataUrl ? res.dataUrl : null;
   }
 
-  async function handleDecision(id: string, decision: "approve" | "reject"): Promise<void> {
-    await send({ type: "plan-decision", id, decision });
+  async function handleDismissNotice(commentId: string): Promise<void> {
+    await send({ type: "dismiss-notice", commentId });
     await refresh();
-  }
-
-  async function handleReconnect(): Promise<void> {
-    if (checking) return;
-    checking = true;
-    render();
-    await withTimeout(refresh(), CHECK_TIMEOUT_MS).catch(() => {});
-    checking = false;
-    render();
   }
 
   function startPolling(): void {
@@ -265,7 +262,7 @@ function init(): void {
   }
 
   async function pollStatus(): Promise<void> {
-    if (!active || checking) return;
+    if (!active) return;
     const res = await send({ type: "queue-status" });
     const next = res.ok ? (res.status ?? null) : null;
     if (!statusChanged(lastStatus, next)) return;
@@ -330,8 +327,19 @@ function init(): void {
     ]);
     lastPins = pinsRes.ok && pinsRes.pins ? pinsRes.pins : [];
     lastStatus = statusRes.ok ? (statusRes.status ?? null) : null;
+    await maybeRotateSession();
     surface.setPins(lastPins, (key) => void removePin(key));
     render();
+  }
+
+  async function maybeRotateSession(): Promise<void> {
+    const connected = Boolean(lastStatus?.serverReachable) && Boolean(lastStatus?.watching);
+    if (wasConnected && !connected) {
+      await send({ type: "reset-session" });
+      const res = await send({ type: "queue-status" });
+      if (res.ok) lastStatus = res.status ?? lastStatus;
+    }
+    wasConnected = connected;
   }
 
   async function removePin(cid: string): Promise<void> {
@@ -340,7 +348,13 @@ function init(): void {
   }
 
   function render(): void {
-    toolbar?.render({ mode, count: lastPins.length, status: lastStatus, drawerOpen, checking });
+    toolbar?.render({
+      mode,
+      count: lastPins.length,
+      status: lastStatus,
+      drawerOpen,
+      sessionId: lastStatus?.sessionId ?? null,
+    });
     drawer?.render(lastPins, drawerCtx());
   }
 
@@ -355,22 +369,6 @@ function init(): void {
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error("timeout")), ms);
-    promise.then(
-      (value) => {
-        window.clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        window.clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 function statusChanged(a: QueueStatus | null, b: QueueStatus | null): boolean {
   if (a === b) return false;
   if (!a || !b) return true;
@@ -380,10 +378,10 @@ function statusChanged(a: QueueStatus | null, b: QueueStatus | null): boolean {
     a.queued !== b.queued ||
     a.watching !== b.watching ||
     a.root !== b.root ||
-    planKey(a.plan) !== planKey(b.plan)
+    noticesKey(a.notices) !== noticesKey(b.notices)
   );
 }
 
-function planKey(plan: QueueStatus["plan"]): string {
-  return plan ? `${plan.id}:${plan.status}:${plan.items.length}` : "";
+function noticesKey(notices: QueueStatus["notices"]): string {
+  return notices?.map((n) => n.commentId).join(",") ?? "";
 }

@@ -1,6 +1,6 @@
 export type CommentStatus = "open" | "resolved" | "wontfix";
 
-export type RequestKind = "comment" | "style" | "text";
+export type OperationType = "comment" | "style" | "text";
 
 export interface SourceLocation {
   path: string;
@@ -9,72 +9,59 @@ export interface SourceLocation {
   via: string;
 }
 
-export interface Fingerprint {
-  selector: string;
-  innerText: string;
-  styles: Record<string, string>;
-  rect: { x: number; y: number; w: number; h: number };
+export interface Operation {
+  type: OperationType;
+  property: string | null;
+  from: string | null;
+  to: string | null;
 }
 
-export interface StyleChange {
-  property: string;
-  from: string;
-  to: string;
-  cssSource?: { file: string; line: number } | null;
-}
-
-export interface TextChange {
-  from: string;
-  to: string;
+export interface CommentMetadata {
+  page: string;
+  viewport: { w: number; h: number };
+  elementText: string;
 }
 
 export interface Comment {
   id: string;
   createdAt: string;
+  comment: string;
+  operation: Operation;
+  operator: string;
   url: string;
-  route: string;
-  kind: RequestKind;
-  text: string;
+  metadata: CommentMetadata;
   status: CommentStatus;
   source: SourceLocation | null;
-  styleChanges: StyleChange[];
-  textChange: TextChange | null;
-  fingerprint: Fingerprint;
   screenshot: string | null;
-  viewport: { w: number; h: number };
+  sessionId?: string;
+  planFirst?: boolean;
 }
 
-export interface Lease {
-  pid: number;
-  startedAt: string;
-  acquiredAt: string;
-  heartbeatAt: string;
-}
-
-export type PlanStatus = "proposed" | "approved" | "rejected" | "applied";
-
-export interface PlanItem {
-  commentId: string;
-  file: string;
-  summary: string;
-}
-
-export interface Plan {
+export interface DeferredComment {
   id: string;
   createdAt: string;
-  status: PlanStatus;
-  note: string | null;
-  items: PlanItem[];
+  page: string;
+  operationType: OperationType;
+  comment: string;
+  reason: string;
+  flaggedBy: "user" | "claude";
+}
+
+export interface DeferralNotice {
+  commentId: string;
+  page: string;
+  summary: string;
+  createdAt: string;
 }
 
 export interface IncomingComment {
-  kind?: RequestKind;
+  comment: string;
+  operation: Operation;
+  operator: string;
   url: string;
-  text: string;
+  metadata: CommentMetadata;
   source?: SourceLocation | null;
-  styleChanges?: StyleChange[];
-  textChange?: TextChange | null;
-  fingerprint: Fingerprint;
   screenshotDataUrl?: string | null;
-  viewport: { w: number; h: number };
+  sessionId?: string;
+  planFirst?: boolean;
 }

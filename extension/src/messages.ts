@@ -1,31 +1,23 @@
-import type { DraftRequest, QueuedRequest, Rect, RequestKind } from "./types.js";
+import type { DraftRequest, OperationType, QueuedRequest, Rect } from "./types.js";
 
 export type PinStatus = "pending" | "open" | "resolved" | "wontfix";
 
 export interface PinModel {
   key: string;
-  selector: string;
+  operator: string;
   text: string;
   status: PinStatus;
-  kind: RequestKind;
+  kind: OperationType;
   removable: boolean;
   route: string;
   target: string;
 }
 
-export type PlanStatus = "proposed" | "approved" | "rejected" | "applied";
-
-export interface PlanItemView {
+export interface DeferralNotice {
   commentId: string;
-  file: string;
+  page: string;
   summary: string;
-}
-
-export interface PlanView {
-  id: string;
-  status: PlanStatus;
-  note: string | null;
-  items: PlanItemView[];
+  createdAt: string;
 }
 
 export type Message =
@@ -40,8 +32,9 @@ export type Message =
   | { type: "count-all" }
   | { type: "update-comment"; cid: string; text: string }
   | { type: "flush" }
-  | { type: "plan-decision"; id: string; decision: "approve" | "reject" }
-  | { type: "queue-status" };
+  | { type: "dismiss-notice"; commentId: string }
+  | { type: "queue-status" }
+  | { type: "reset-session" };
 
 export interface QueueStatus {
   queued: number;
@@ -49,7 +42,8 @@ export interface QueueStatus {
   port: number | null;
   root?: string | null;
   watching?: boolean;
-  plan?: PlanView | null;
+  notices?: DeferralNotice[];
+  sessionId?: string;
 }
 
 export type Response =

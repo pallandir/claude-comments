@@ -12,36 +12,31 @@ export interface Rect {
   h: number;
 }
 
-export interface Fingerprint {
-  selector: string;
-  innerText: string;
-  styles: Record<string, string>;
-  rect: Rect;
+export type OperationType = "comment" | "style" | "text";
+
+export interface Operation {
+  type: OperationType;
+  property: string | null;
+  from: string | null;
+  to: string | null;
 }
 
-export type RequestKind = "comment" | "style" | "text";
-
-export interface StyleChange {
-  property: string;
-  from: string;
-  to: string;
-}
-
-export interface TextChange {
-  from: string;
-  to: string;
+export interface CommentMetadata {
+  page: string;
+  viewport: { w: number; h: number };
+  elementText: string;
 }
 
 export interface DraftRequest {
-  kind: RequestKind;
+  comment: string;
+  operation: Operation;
+  operator: string;
   url: string;
-  text: string;
-  styleChanges?: StyleChange[];
-  textChange?: TextChange;
+  metadata: CommentMetadata;
   source: SourceLocation | null;
-  fingerprint: Fingerprint;
   screenshotDataUrl: string | null;
-  viewport: { w: number; h: number };
+  sessionId?: string;
+  planFirst?: boolean;
 }
 
 export interface QueuedRequest extends DraftRequest {

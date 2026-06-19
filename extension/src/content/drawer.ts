@@ -229,8 +229,8 @@ function helpFor(ctx: DrawerContext): Guide {
       steps: [
         "Your comments are saved locally for this page.",
         "Start Redline's server in your code editor.",
-        "Run `/loop /comments` in Claude Code to pick them up.",
-        "Review and apply the changes Claude proposes.",
+        "Paste `/redline <id>` from the toolbar into Claude Code to start.",
+        "Claude implements each comment automatically.",
       ],
     };
   }

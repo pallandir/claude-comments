@@ -1,26 +1,26 @@
-import type { PinStatus, PlanView, QueueStatus } from "../messages.js";
-import type { DraftRequest, QueuedRequest, RequestKind, SourceLocation } from "../types.js";
+import type { DeferralNotice, PinStatus, QueueStatus } from "../messages.js";
+import type {
+  CommentMetadata,
+  DraftRequest,
+  Operation,
+  QueuedRequest,
+  SourceLocation,
+} from "../types.js";
 
 const QUEUE_KEY = "redline-queue";
+const SESSION_KEY = "redline-session-id";
 const PORTS = [7474, 7475, 7476];
 const PROBE_TIMEOUT_MS = 400;
-const WATCH_TTL_MS = 35_000;
 
 export interface ServerComment {
   id: string;
   url: string;
-  route?: string;
-  text: string;
+  comment: string;
+  operation: Operation;
+  operator: string;
+  metadata: CommentMetadata;
   status: PinStatus;
-  kind: RequestKind;
   source?: SourceLocation | null;
-  fingerprint: { selector: string; innerText?: string };
-}
-
-interface Lease {
-  pid: number;
-  startedAt: string;
-  heartbeatAt: string;
 }
 
 interface Health {
@@ -30,7 +30,11 @@ interface Health {
   startedAt?: string;
   version?: number;
   lastPolledAt?: string | null;
-  lease?: Lease | null;
+  expectedSession?: string | null;
+  boundSession?: string | null;
+  boundHeartbeatAt?: string | null;
+  watching?: boolean;
+  notices?: DeferralNotice[];
 }
 
 interface ServerInfo {
@@ -38,7 +42,9 @@ interface ServerInfo {
   root: string;
   startedAt: string;
   lastPolledAt: string | null;
-  lease: Lease | null;
+  expectedSession: string | null;
+  watching: boolean;
+  notices: DeferralNotice[];
 }
 
 // A page is "local" when it is served from this machine. Only then may the
@@ -77,6 +83,21 @@ async function getQueue(): Promise<QueuedRequest[]> {
 
 async function setQueue(queue: QueuedRequest[]): Promise<void> {
   await chrome.storage.local.set({ [QUEUE_KEY]: queue });
+}
+
+export async function getSessionId(): Promise<string> {
+  const stored = await chrome.storage.local.get(SESSION_KEY);
+  const existing = stored[SESSION_KEY] as string | undefined;
+  if (existing) return existing;
+  const id = crypto.randomUUID().slice(0, 8);
+  await chrome.storage.local.set({ [SESSION_KEY]: id });
+  return id;
+}
+
+export async function resetSessionId(): Promise<string> {
+  const id = crypto.randomUUID().slice(0, 8);
+  await chrome.storage.local.set({ [SESSION_KEY]: id });
+  return id;
 }
 
 export async function enqueue(draft: DraftRequest): Promise<QueuedRequest> {
@@ -140,7 +161,7 @@ export async function update(cid: string, text: string): Promise<void> {
   const queue = await getQueue();
   const item = queue.find((c) => c.cid === cid);
   if (item) {
-    item.text = text;
+    item.comment = text;
     await setQueue(queue);
   }
 }
@@ -158,7 +179,9 @@ async function probe(port: number): Promise<ServerInfo | null> {
       root: body.root,
       startedAt: body.startedAt,
       lastPolledAt: body.lastPolledAt ?? null,
-      lease: body.lease ?? null,
+      expectedSession: body.expectedSession ?? null,
+      watching: body.watching ?? false,
+      notices: body.notices ?? [],
     };
   } catch {
     return null;
@@ -176,9 +199,13 @@ async function findServer(): Promise<ServerInfo | null> {
   return live.reduce((best, cur) => (cur.startedAt > best.startedAt ? cur : best));
 }
 
-function isWatching(lease: Lease | null): boolean {
-  if (!lease) return false;
-  return Date.now() - Date.parse(lease.heartbeatAt) < WATCH_TTL_MS;
+async function publishSessionIfNeeded(server: ServerInfo, sessionId: string): Promise<void> {
+  if (server.expectedSession === sessionId) return;
+  try {
+    await postJson(server.port, "/session", { sessionId });
+  } catch {
+    // best-effort; the extension will retry on the next poll
+  }
 }
 
 export async function fetchServerComments(url: string): Promise<ServerComment[]> {
@@ -194,38 +221,28 @@ export async function fetchServerComments(url: string): Promise<ServerComment[]>
   }
 }
 
-async function fetchPlan(port: number): Promise<PlanView | null> {
-  try {
-    const res = await fetch(api(port, "/plan"));
-    if (!res.ok) return null;
-    return (await res.json()) as PlanView | null;
-  } catch {
-    return null;
-  }
-}
-
-export async function decidePlan(id: string, decision: "approve" | "reject"): Promise<void> {
+export async function dismissNotice(commentId: string): Promise<void> {
   const server = await findServer();
   if (!server) return;
   try {
-    await postJson(server.port, "/plan/decision", { id, decision });
+    await postJson(server.port, "/notices/dismiss", { commentId });
   } catch {
-    // server gone; caller will re-poll status
+    // server gone; toolbar will clear on next poll when notice is absent
   }
 }
 
 async function statusFrom(server: ServerInfo | null): Promise<QueueStatus> {
   const queued = (await getQueue()).length;
   if (!server) {
-    return { queued, serverReachable: false, port: null, root: null, watching: false, plan: null };
+    return { queued, serverReachable: false, port: null, root: null, watching: false, notices: [] };
   }
   return {
     queued,
     serverReachable: true,
     port: server.port,
     root: server.root,
-    watching: isWatching(server.lease),
-    plan: await fetchPlan(server.port),
+    watching: server.watching,
+    notices: server.notices,
   };
 }
 
@@ -233,11 +250,14 @@ export async function flush(): Promise<QueueStatus> {
   const server = await findServer();
   if (!server) return statusFrom(null);
 
+  const sessionId = await getSessionId();
+  await publishSessionIfNeeded(server, sessionId);
+
   const posted = new Set<string>();
   for (const item of await getQueue()) {
     try {
       const { cid: _cid, queuedAt: _queuedAt, ...draft } = item;
-      const res = await postJson(server.port, "/comments", draft);
+      const res = await postJson(server.port, "/comments", { ...draft, sessionId });
       if (res.ok) posted.add(item.cid);
     } catch {
       // keep the item queued for the next flush
@@ -247,9 +267,19 @@ export async function flush(): Promise<QueueStatus> {
   // Re-read the queue rather than overwriting it: items enqueued while we were
   // posting must survive, so only drop the cids we actually delivered.
   await setQueue((await getQueue()).filter((item) => !posted.has(item.cid)));
-  return statusFrom(server);
+
+  // Re-probe to get fresh watching/notices state after publishing
+  const fresh = await findServer();
+  return statusFrom(fresh);
 }
 
 export async function status(): Promise<QueueStatus> {
-  return statusFrom(await findServer());
+  const server = await findServer();
+  if (server) {
+    const sessionId = await getSessionId();
+    await publishSessionIfNeeded(server, sessionId);
+    const fresh = await findServer();
+    return statusFrom(fresh);
+  }
+  return statusFrom(null);
 }

@@ -17,16 +17,19 @@ export function buildHandoffMarkdown(requests: QueuedRequest[]): string {
   ];
 
   requests.forEach((r, i) => {
-    lines.push(`## ${i + 1}. ${kindLabel(r)} · ${routeOf(r.url)}`, "");
-    if (r.text) lines.push(`> ${r.text}`, "");
-    for (const change of r.styleChanges ?? []) {
-      lines.push(`- \`${change.property}\`: \`${change.from}\` → \`${change.to}\``);
+    lines.push(`## ${i + 1}. ${kindLabel(r)} · ${r.metadata.page}`, "");
+    if (r.comment) lines.push(`> ${r.comment}`, "");
+    const op = r.operation;
+    if (op.type === "style" && op.property && op.from !== null && op.to !== null) {
+      lines.push(`- \`${op.property}\`: \`${op.from}\` → \`${op.to}\``);
     }
-    if (r.textChange) lines.push(`- text: "${r.textChange.from}" → "${r.textChange.to}"`);
+    if (op.type === "text" && op.from !== null && op.to !== null) {
+      lines.push(`- text: "${op.from}" → "${op.to}"`);
+    }
     if (r.source) {
       lines.push(`- Source: \`${r.source.path}:${r.source.line}:${r.source.column}\``);
     }
-    lines.push(`- Element: \`${r.fingerprint.selector}\``);
+    lines.push(`- Element: \`${r.operator}\``);
     lines.push(`- Page: ${r.url}`, "");
     if (r.screenshotDataUrl) lines.push(`![item ${i + 1}](${r.screenshotDataUrl})`, "");
   });
@@ -45,17 +48,9 @@ export function downloadHandoff(requests: QueuedRequest[]): void {
 }
 
 function kindLabel(r: QueuedRequest): string {
-  if (r.kind === "style") return "Style change";
-  if (r.kind === "text") return "Text change";
+  if (r.operation.type === "style") return "Style change";
+  if (r.operation.type === "text") return "Text change";
   return "Comment";
-}
-
-function routeOf(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return url;
-  }
 }
 
 function safeHost(url: string): string {

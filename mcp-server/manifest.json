@@ -3,7 +3,7 @@
   "name": "redline",
   "display_name": "Redline",
   "version": "1.0.0",
-  "description": "Ingests real-time UI comments from the Redline browser extension and exposes them to your AI coding assistant.",
+  "description": "Ingests real-time UI comments from the Redline browser extension and exposes them to your AI coding assistant, which implements them directly and parks anything that needs a plan.",
   "author": {
     "name": "pallandir",
     "url": "https://github.com/pallandir"
@@ -50,7 +50,21 @@
       "name": "resolve_comment",
       "description": "Set a comment's status to open, resolved, or wontfix."
     },
-    { "name": "clear_resolved", "description": "Remove every comment that is not open." }
+    { "name": "clear_resolved", "description": "Remove every comment that is not open." },
+    {
+      "name": "wait_for_update",
+      "description": "Block until the store changes or a short timeout; heartbeats the session binding."
+    },
+    {
+      "name": "bind_session",
+      "description": "Pair with the session id shown in the browser toolbar."
+    },
+    { "name": "unbind_session", "description": "Release session ownership when watch mode stops." },
+    {
+      "name": "defer_comment",
+      "description": "Park a comment for later planning; notifies the browser toolbar."
+    },
+    { "name": "list_deferred", "description": "List comments that were deferred for planning." }
   ],
   "compatibility": {
     "runtimes": {

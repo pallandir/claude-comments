@@ -18,17 +18,12 @@ afterEach(async () => {
 
 function sample(overrides: Partial<IncomingComment> = {}): IncomingComment {
   return {
-    kind: "comment",
+    comment: "This card padding is off",
+    operation: { type: "comment", property: null, from: null, to: null },
+    operator: "/html/body/main[1]/section[2]/div[1]",
     url: "http://localhost:3000/dashboard",
-    text: "This card padding is off",
+    metadata: { page: "/dashboard", viewport: { w: 1440, h: 900 }, elementText: "Total revenue" },
     source: { path: "src/Card.tsx", line: 42, column: 8, via: "react-dev-inspector" },
-    fingerprint: {
-      selector: "main > section:nth-child(2) > .card",
-      innerText: "Total revenue",
-      styles: { color: "rgb(0,0,0)" },
-      rect: { x: 0, y: 0, w: 10, h: 10 },
-    },
-    viewport: { w: 1440, h: 900 },
     screenshotDataUrl: null,
     ...overrides,
   };
@@ -40,20 +35,20 @@ test("add then list round-trips core fields through the markdown store", async (
   const [got] = await store.list();
 
   assert.equal(got.id, added.id);
-  assert.equal(got.text, "This card padding is off");
-  assert.equal(got.route, "/dashboard");
-  assert.equal(got.kind, "comment");
+  assert.equal(got.comment, "This card padding is off");
+  assert.equal(got.metadata.page, "/dashboard");
+  assert.equal(got.operation.type, "comment");
   assert.equal(got.status, "open");
   assert.equal(got.source?.path, "src/Card.tsx");
   assert.equal(got.source?.line, 42);
-  assert.equal(got.fingerprint.selector, "main > section:nth-child(2) > .card");
-  assert.equal(got.viewport.w, 1440);
+  assert.equal(got.operator, "/html/body/main[1]/section[2]/div[1]");
+  assert.equal(got.metadata.viewport.w, 1440);
 });
 
 test("setStatus persists and list filters by status", async () => {
   const store = new CommentStore(root);
   const a = await store.add(sample());
-  await store.add(sample({ text: "second" }));
+  await store.add(sample({ comment: "second" }));
 
   await store.setStatus(a.id, "resolved");
   assert.equal((await store.list("open")).length, 1);
@@ -63,7 +58,7 @@ test("setStatus persists and list filters by status", async () => {
 test("clearResolved keeps only open comments", async () => {
   const store = new CommentStore(root);
   const a = await store.add(sample());
-  await store.add(sample({ text: "second" }));
+  await store.add(sample({ comment: "second" }));
   await store.setStatus(a.id, "wontfix");
 
   const removed = await store.clearResolved();
@@ -73,16 +68,30 @@ test("clearResolved keeps only open comments", async () => {
   assert.equal(left[0].status, "open");
 });
 
-test("style and text changes survive a serialize/parse cycle", async () => {
+test("style operation survives a serialize/parse cycle", async () => {
   const store = new CommentStore(root);
   await store.add(
     sample({
-      kind: "style",
-      text: "Change color",
-      styleChanges: [{ property: "color", from: "rgb(0,0,0)", to: "#d97757", cssSource: null }],
+      comment: "Change color",
+      operation: { type: "style", property: "color", from: "rgb(0,0,0)", to: "#d97757" },
     }),
   );
   const [got] = await store.list();
-  assert.equal(got.styleChanges[0].property, "color");
-  assert.equal(got.styleChanges[0].to, "#d97757");
+  assert.equal(got.operation.type, "style");
+  assert.equal(got.operation.property, "color");
+  assert.equal(got.operation.to, "#d97757");
+});
+
+test("text operation survives a serialize/parse cycle", async () => {
+  const store = new CommentStore(root);
+  await store.add(
+    sample({
+      comment: 'Change text from "Submit" to "Save changes"',
+      operation: { type: "text", property: null, from: "Submit", to: "Save changes" },
+    }),
+  );
+  const [got] = await store.list();
+  assert.equal(got.operation.type, "text");
+  assert.equal(got.operation.from, "Submit");
+  assert.equal(got.operation.to, "Save changes");
 });

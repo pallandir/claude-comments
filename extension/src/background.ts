@@ -5,13 +5,15 @@ import {
   clearForUrl,
   clearServerForUrl,
   countAll,
-  decidePlan,
+  dismissNotice,
   enqueue,
   fetchServerComments,
   flush,
+  getSessionId,
   isLocalUrl,
   listForUrl,
   remove,
+  resetSessionId,
   status,
   update,
 } from "./lib/transport.js";
@@ -92,9 +94,9 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     }
     case "page-comments":
       return { ok: true, pins: await pagePins(message.url) };
-    case "plan-decision": {
+    case "dismiss-notice": {
       if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true, status: offlineStatus() };
-      await decidePlan(message.id, message.decision);
+      await dismissNotice(message.commentId);
       return { ok: true, status: await status() };
     }
     case "get-comments":
@@ -120,15 +122,27 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     }
     case "queue-status": {
       const local = isLocalUrl(sender.tab?.url ?? "");
-      return { ok: true, status: local ? await status() : offlineStatus() };
+      if (!local) return { ok: true, status: offlineStatus() };
+      const st = await status();
+      return { ok: true, status: { ...st, sessionId: await getSessionId() } };
     }
+    case "reset-session":
+      await resetSessionId();
+      return { ok: true };
     default:
       return { ok: false, error: `unhandled message: ${(message as Message).type}` };
   }
 }
 
 function offlineStatus(): QueueStatus {
-  return { queued: 0, serverReachable: false, port: null, root: null, watching: false, plan: null };
+  return {
+    queued: 0,
+    serverReachable: false,
+    port: null,
+    root: null,
+    watching: false,
+    notices: [],
+  };
 }
 
 async function isActive(tabId: number): Promise<boolean> {
@@ -154,29 +168,25 @@ async function pagePins(url: string): Promise<PinModel[]> {
     ...queued.map(
       (q): PinModel => ({
         key: q.cid,
-        selector: q.fingerprint.selector,
-        text: q.text,
+        operator: q.operator,
+        text: q.comment,
         status: "pending",
-        kind: q.kind,
+        kind: q.operation.type,
         removable: true,
         route: routeOf(q.url),
-        target: targetLabel(q.fingerprint.selector, q.source, q.fingerprint.innerText),
+        target: targetLabel(q.operator, q.source, q.metadata.elementText),
       }),
     ),
     ...synced.map(
       (s): PinModel => ({
         key: s.id,
-        selector: s.fingerprint.selector,
-        text: s.text,
+        operator: s.operator,
+        text: s.comment,
         status: s.status,
-        kind: s.kind,
+        kind: s.operation.type,
         removable: false,
-        route: s.route ?? routeOf(s.url),
-        target: targetLabel(
-          s.fingerprint.selector,
-          s.source ?? null,
-          s.fingerprint.innerText ?? "",
-        ),
+        route: s.metadata.page,
+        target: targetLabel(s.operator, s.source ?? null, s.metadata.elementText),
       }),
     ),
   ];
@@ -190,20 +200,21 @@ function routeOf(url: string): string {
   }
 }
 
-function targetLabel(selector: string, source: SourceLocation | null, innerText: string): string {
+function targetLabel(xpath: string, source: SourceLocation | null, elementText: string): string {
   if (source?.path) {
     const base = source.path.split(/[\\/]/).pop() ?? source.path;
     const name = base.replace(/\.[^.]+$/, "");
     if (name) return name;
   }
-  const tag = lastTag(selector);
-  const text = innerText.trim();
+  const tag = lastTag(xpath);
+  const text = elementText.trim();
   return text ? `${tag} · ${text.length > 22 ? `${text.slice(0, 22)}…` : text}` : tag;
 }
 
-function lastTag(selector: string): string {
-  const part = selector.split(">").pop()?.trim() ?? "";
-  if (part.startsWith("#")) return part;
-  const match = part.match(/^([a-zA-Z][\w-]*)/);
-  return match ? `<${match[1]}>` : "element";
+function lastTag(xpath: string): string {
+  const part = xpath.split("/").pop() ?? "";
+  const idMatch = part.match(/@id="([^"]+)"/);
+  if (idMatch) return `#${idMatch[1]}`;
+  const tagMatch = part.match(/^([a-zA-Z][\w-]*)/);
+  return tagMatch ? `<${tagMatch[1]}>` : "element";
 }

@@ -1,85 +1,35 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import type {
   Comment,
   CommentStatus,
+  DeferredComment,
   IncomingComment,
-  Lease,
-  Plan,
-  PlanItem,
-  RequestKind,
-  StyleChange,
-  TextChange,
+  Operation,
+  OperationType,
 } from "./types.js";
 
 const STORE_DIR = ".claude";
 const STORE_FILE = join(STORE_DIR, "design-comments.md");
 const SHOTS_DIR = join(STORE_DIR, "design-shots");
-const PLAN_FILE = join(STORE_DIR, "redline-plan.json");
-const LEASE_FILE = join(STORE_DIR, "redline-lock.json");
+const DEFERRED_FILE = join(STORE_DIR, "redline-deferred.md");
 
 export class CommentStore {
   private readonly storeRoot: string;
   private readonly storePath: string;
   private readonly shotsPath: string;
-  private readonly planPath: string;
-  private readonly leasePath: string;
+  private readonly deferredPath: string;
 
   constructor(root: string) {
     this.storeRoot = root;
     this.storePath = join(root, STORE_FILE);
     this.shotsPath = join(root, SHOTS_DIR);
-    this.planPath = join(root, PLAN_FILE);
-    this.leasePath = join(root, LEASE_FILE);
+    this.deferredPath = join(root, DEFERRED_FILE);
   }
 
   get root(): string {
     return this.storeRoot;
-  }
-
-  async getLease(): Promise<Lease | null> {
-    return readJsonFile<Lease>(this.leasePath);
-  }
-
-  async writeLease(lease: Lease): Promise<void> {
-    await writeJsonFile(this.leasePath, lease);
-  }
-
-  async clearLease(): Promise<void> {
-    await rm(this.leasePath, { force: true });
-  }
-
-  async getPlan(): Promise<Plan | null> {
-    return readJsonFile<Plan>(this.planPath);
-  }
-
-  async setPlan(items: PlanItem[], note: string | null): Promise<Plan> {
-    const plan: Plan = {
-      id: `p-${randomUUID().slice(0, 8)}`,
-      createdAt: new Date().toISOString(),
-      status: "proposed",
-      note,
-      items,
-    };
-    await this.writePlan(plan);
-    return plan;
-  }
-
-  async decidePlan(id: string, status: "approved" | "rejected"): Promise<Plan | null> {
-    const plan = await this.getPlan();
-    if (!plan || plan.id !== id) return null;
-    plan.status = status;
-    await this.writePlan(plan);
-    return plan;
-  }
-
-  async clearPlan(): Promise<void> {
-    await rm(this.planPath, { force: true });
-  }
-
-  private async writePlan(plan: Plan): Promise<void> {
-    await writeJsonFile(this.planPath, plan);
   }
 
   async list(status?: CommentStatus): Promise<Comment[]> {
@@ -101,17 +51,16 @@ export class CommentStore {
     const comment: Comment = {
       id,
       createdAt: new Date().toISOString(),
+      comment: incoming.comment,
+      operation: incoming.operation,
+      operator: incoming.operator,
       url: incoming.url,
-      route: routeOf(incoming.url),
-      kind: incoming.kind ?? "comment",
-      text: incoming.text,
+      metadata: incoming.metadata,
       status: "open",
       source: incoming.source ?? null,
-      styleChanges: incoming.styleChanges ?? [],
-      textChange: incoming.textChange ?? null,
-      fingerprint: incoming.fingerprint,
       screenshot,
-      viewport: incoming.viewport,
+      sessionId: incoming.sessionId,
+      planFirst: incoming.planFirst ?? false,
     };
     comments.push(comment);
     await this.write(comments);
@@ -141,6 +90,35 @@ export class CommentStore {
     return comments.length - kept.length;
   }
 
+  async listDeferred(): Promise<DeferredComment[]> {
+    const raw = await readTextFile(this.deferredPath);
+    return raw === null ? [] : parseDeferred(raw);
+  }
+
+  async addDeferred(
+    origin: Comment,
+    reason: string,
+    flaggedBy: "user" | "claude",
+  ): Promise<DeferredComment> {
+    const existing = await this.listDeferred();
+    const found = existing.find((d) => d.id === origin.id);
+    if (found) {
+      return found;
+    }
+    const entry: DeferredComment = {
+      id: origin.id,
+      createdAt: new Date().toISOString(),
+      page: origin.metadata.page,
+      operationType: origin.operation.type,
+      comment: origin.comment,
+      reason,
+      flaggedBy,
+    };
+    existing.push(entry);
+    await writeFileAtomic(this.deferredPath, serializeDeferred(existing));
+    return entry;
+  }
+
   private async saveShot(id: string, dataUrl: string): Promise<string> {
     await mkdir(this.shotsPath, { recursive: true });
     const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
@@ -168,24 +146,6 @@ async function readTextFile(path: string): Promise<string | null> {
   }
 }
 
-// A truncated or hand-edited sidecar must read as "absent", not crash the
-// request handler that reads it; a fresh write repairs it.
-async function readJsonFile<T>(path: string): Promise<T | null> {
-  const raw = await readTextFile(path);
-  if (raw === null) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function writeJsonFile(path: string, value: unknown): Promise<void> {
-  await writeFileAtomic(path, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-// Write to a temp file and rename over the target so a concurrent reader never
-// observes a partially written file.
 async function writeFileAtomic(path: string, contents: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   const tmp = `${path}.${randomUUID().slice(0, 8)}.tmp`;
@@ -193,25 +153,19 @@ async function writeFileAtomic(path: string, contents: string): Promise<void> {
   await rename(tmp, path);
 }
 
-function routeOf(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return url;
-  }
-}
-
 function serialize(comments: Comment[]): string {
   const blocks = comments.map((c) => {
-    const lines = [`## [${c.status}] ${c.id} · ${c.route} · ${c.kind}`, `> ${c.text}`, ""];
+    const lines = [
+      `## [${c.status}] ${c.id} · ${c.metadata.page} · ${c.operation.type}`,
+      `> ${c.comment}`,
+      "",
+    ];
     if (c.screenshot) lines.push(`![${c.id}](${c.screenshot})`, "");
-    for (const change of c.styleChanges) {
-      const css = change.cssSource ? ` @ ${change.cssSource.file}:${change.cssSource.line}` : "";
-      lines.push(`- change: ${change.property}: ${change.from} -> ${change.to}${css}`);
-    }
-    if (c.textChange) {
+    const op = c.operation;
+    if (op.type !== "comment") {
+      const prop = op.property ? `${op.property}: ` : "";
       lines.push(
-        `- text-change: ${JSON.stringify(c.textChange.from)} -> ${JSON.stringify(c.textChange.to)}`,
+        `- operation: ${op.type} ${prop}${JSON.stringify(op.from)} -> ${JSON.stringify(op.to)}`,
       );
     }
     if (c.source) {
@@ -219,12 +173,12 @@ function serialize(comments: Comment[]): string {
         `- source: ${c.source.path}:${c.source.line}:${c.source.column} (${c.source.via})`,
       );
     }
-    const viewport = c.viewport ?? { w: 0, h: 0 };
-    const fingerprint = c.fingerprint ?? { selector: "", innerText: "" };
+    if (c.planFirst) lines.push("- planfirst: true");
+    if (c.sessionId) lines.push(`- session: ${c.sessionId}`);
     lines.push(
-      `- selector: ${fingerprint.selector ?? ""}`,
-      `- text: ${JSON.stringify(fingerprint.innerText ?? "")}`,
-      `- viewport: ${viewport.w}x${viewport.h}`,
+      `- operator: ${c.operator}`,
+      `- elementtext: ${JSON.stringify(c.metadata.elementText)}`,
+      `- viewport: ${c.metadata.viewport.w}x${c.metadata.viewport.h}`,
       `- url: ${c.url}`,
       `- created: ${c.createdAt}`,
     );
@@ -233,7 +187,7 @@ function serialize(comments: Comment[]): string {
   return `# Design comments\n\n${blocks.join("\n\n")}\n`;
 }
 
-const HEADING = /^## \[(open|resolved|wontfix)\] (\S+) · (.+?)(?: · (comment|style|text))?$/;
+const HEADING = /^## \[(open|resolved|wontfix)\] (\S+) · (.+?) · (comment|style|text)$/;
 const KV = /^- (\w+): (.+)$/;
 const SOURCE = /^(.+):(\d+):(\d+) \((.+)\)$/;
 
@@ -241,12 +195,11 @@ interface Draft {
   kv: Record<string, string>;
   status: CommentStatus;
   id: string;
-  route: string;
-  kind: RequestKind;
-  text?: string;
+  page: string;
+  operationType: OperationType;
+  comment?: string;
   screenshot?: string;
-  styleChanges: StyleChange[];
-  textChange: TextChange | null;
+  operation?: Operation;
 }
 
 function parse(raw: string): Comment[] {
@@ -257,27 +210,31 @@ function parse(raw: string): Comment[] {
     if (!current) return;
     const kv = current.kv;
     const source = kv.source?.match(SOURCE);
+    const viewport = parseViewport(kv.viewport);
     comments.push({
       id: current.id,
       createdAt: kv.created ?? new Date(0).toISOString(),
+      comment: current.comment ?? "",
+      operation: current.operation ?? {
+        type: current.operationType,
+        property: null,
+        from: null,
+        to: null,
+      },
+      operator: kv.operator ?? "",
       url: kv.url ?? "",
-      route: current.route,
-      kind: current.kind,
-      text: current.text ?? "",
+      metadata: {
+        page: current.page,
+        viewport,
+        elementText: safeJson(kv.elementtext) ?? "",
+      },
       status: current.status,
       source: source
         ? { path: source[1], line: Number(source[2]), column: Number(source[3]), via: source[4] }
         : null,
-      styleChanges: current.styleChanges,
-      textChange: current.textChange,
-      fingerprint: {
-        selector: kv.selector ?? "",
-        innerText: safeJson(kv.text) ?? "",
-        styles: {},
-        rect: { x: 0, y: 0, w: 0, h: 0 },
-      },
       screenshot: current.screenshot ?? null,
-      viewport: parseViewport(kv.viewport),
+      planFirst: kv.planfirst === "true",
+      sessionId: kv.session,
     });
   };
 
@@ -289,16 +246,14 @@ function parse(raw: string): Comment[] {
         kv: {},
         status: heading[1] as CommentStatus,
         id: heading[2],
-        route: heading[3],
-        kind: (heading[4] as RequestKind) ?? "comment",
-        styleChanges: [],
-        textChange: null,
+        page: heading[3],
+        operationType: (heading[4] as OperationType) ?? "comment",
       };
       continue;
     }
     if (!current) continue;
     if (line.startsWith("> ")) {
-      current.text = line.slice(2);
+      current.comment = line.slice(2);
       continue;
     }
     const shot = line.match(/^!\[.*\]\((.+)\)$/);
@@ -306,13 +261,8 @@ function parse(raw: string): Comment[] {
       current.screenshot = shot[1];
       continue;
     }
-    if (line.startsWith("- change: ")) {
-      const change = parseChange(line.slice("- change: ".length));
-      if (change) current.styleChanges.push(change);
-      continue;
-    }
-    if (line.startsWith("- text-change: ")) {
-      current.textChange = parseTextChange(line.slice("- text-change: ".length));
+    if (line.startsWith("- operation: ")) {
+      current.operation = parseOperation(line.slice("- operation: ".length));
       continue;
     }
     const kv = line.match(KV);
@@ -322,27 +272,48 @@ function parse(raw: string): Comment[] {
   return comments;
 }
 
-function parseChange(body: string): StyleChange | null {
-  let rest = body;
-  let cssSource: StyleChange["cssSource"] = null;
-  const at = rest.lastIndexOf(" @ ");
-  if (at >= 0) {
-    const loc = rest.slice(at + 3).match(/^(.+):(\d+)$/);
-    if (loc) cssSource = { file: loc[1], line: Number(loc[2]) };
-    rest = rest.slice(0, at);
+function parseOperation(body: string): Operation {
+  const spaceIdx = body.indexOf(" ");
+  if (spaceIdx < 0) {
+    return { type: body as OperationType, property: null, from: null, to: null };
   }
-  const colon = rest.indexOf(": ");
-  if (colon < 0) return null;
-  const property = rest.slice(0, colon);
-  const [from, to] = rest.slice(colon + 2).split(" -> ");
-  if (from === undefined || to === undefined) return null;
-  return { property, from, to, cssSource };
-}
+  const type = body.slice(0, spaceIdx) as OperationType;
+  const rest = body.slice(spaceIdx + 1);
 
-function parseTextChange(body: string): TextChange | null {
-  const parts = body.split(" -> ");
-  if (parts.length !== 2) return null;
-  return { from: safeJson(parts[0]) ?? parts[0], to: safeJson(parts[1]) ?? parts[1] };
+  if (type === "text") {
+    const arrowIdx = rest.indexOf('" -> "');
+    if (arrowIdx >= 0) {
+      const fromJson = rest.slice(0, arrowIdx + 1);
+      const toJson = `"${rest.slice(arrowIdx + 6)}`;
+      return {
+        type: "text",
+        property: null,
+        from: safeJson(fromJson) ?? fromJson,
+        to: safeJson(toJson) ?? toJson,
+      };
+    }
+  }
+
+  if (type === "style") {
+    const colonIdx = rest.indexOf(': "');
+    if (colonIdx >= 0) {
+      const property = rest.slice(0, colonIdx);
+      const remaining = rest.slice(colonIdx + 2);
+      const arrowIdx = remaining.indexOf('" -> "');
+      if (arrowIdx >= 0) {
+        const fromJson = remaining.slice(0, arrowIdx + 1);
+        const toJson = `"${remaining.slice(arrowIdx + 6)}`;
+        return {
+          type: "style",
+          property,
+          from: safeJson(fromJson) ?? fromJson,
+          to: safeJson(toJson) ?? toJson,
+        };
+      }
+    }
+  }
+
+  return { type, property: null, from: null, to: null };
 }
 
 function parseViewport(value?: string): { w: number; h: number } {
@@ -357,4 +328,62 @@ function safeJson(value?: string): string | undefined {
   } catch {
     return value;
   }
+}
+
+function serializeDeferred(entries: DeferredComment[]): string {
+  const blocks = entries.map((d) => {
+    const lines = [
+      `## [deferred] ${d.id} · ${d.page} · ${d.operationType}`,
+      `> ${d.comment}`,
+      "",
+      `- reason: ${d.reason}`,
+      `- flaggedby: ${d.flaggedBy}`,
+      `- created: ${d.createdAt}`,
+    ];
+    return lines.join("\n");
+  });
+  return `# Deferred comments\n\n${blocks.join("\n\n")}\n`;
+}
+
+const DEFERRED_HEADING = /^## \[deferred\] (\S+) · (.+?) · (comment|style|text)$/;
+
+function parseDeferred(raw: string): DeferredComment[] {
+  const entries: DeferredComment[] = [];
+  let current: (Partial<DeferredComment> & { kv: Record<string, string> }) | null = null;
+
+  const flush = () => {
+    if (!current) return;
+    entries.push({
+      id: current.id ?? "",
+      createdAt: current.kv.created ?? new Date(0).toISOString(),
+      page: current.page ?? "",
+      operationType: (current.operationType ?? "comment") as OperationType,
+      comment: current.comment ?? "",
+      reason: current.kv.reason ?? "",
+      flaggedBy: (current.kv.flaggedby as "user" | "claude") ?? "claude",
+    });
+  };
+
+  for (const line of raw.split("\n")) {
+    const heading = line.match(DEFERRED_HEADING);
+    if (heading) {
+      flush();
+      current = {
+        kv: {},
+        id: heading[1],
+        page: heading[2],
+        operationType: heading[3] as OperationType,
+      };
+      continue;
+    }
+    if (!current) continue;
+    if (line.startsWith("> ")) {
+      current.comment = line.slice(2);
+      continue;
+    }
+    const kv = line.match(KV);
+    if (kv) current.kv[kv[1]] = kv[2];
+  }
+  flush();
+  return entries;
 }

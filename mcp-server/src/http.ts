@@ -6,6 +6,7 @@ import { parseIncoming } from "./validate.js";
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const SERVICE = "redline";
 const WAIT_TIMEOUT_MS = 25_000;
+const BOUND_TTL_MS = 35_000;
 
 export interface IngestServer {
   port: number;
@@ -90,7 +91,11 @@ async function handle(
       pid: broker.pid,
       version: broker.currentVersion,
       lastPolledAt: broker.lastPolledAt,
-      lease: await store.getLease(),
+      expectedSession: broker.expectedSession,
+      boundSession: broker.boundSession,
+      boundHeartbeatAt: broker.boundHeartbeat,
+      watching: broker.isBoundAlive(BOUND_TTL_MS),
+      notices: broker.pendingNotices,
     });
     return;
   }
@@ -109,28 +114,33 @@ async function handle(
     return;
   }
 
-  if (req.method === "GET" && req.url === "/plan") {
-    json(res, 200, (await store.getPlan()) ?? null);
+  if (req.method === "POST" && req.url === "/session") {
+    try {
+      const body = await readBody(req);
+      const parsed = JSON.parse(body) as { sessionId?: string };
+      if (!parsed.sessionId || typeof parsed.sessionId !== "string") {
+        json(res, 400, { error: "sessionId required" });
+        return;
+      }
+      broker.publishSession(parsed.sessionId);
+      log(`session published: ${parsed.sessionId}`);
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
     return;
   }
 
-  if (req.method === "POST" && req.url === "/plan/decision") {
+  if (req.method === "POST" && req.url === "/notices/dismiss") {
     try {
       const body = await readBody(req);
-      const parsed = JSON.parse(body) as { id?: string; decision?: string };
-      const status = decisionToStatus(parsed.decision);
-      if (!parsed.id || !status) {
-        json(res, 400, { error: "id and decision (approve|reject) required" });
+      const parsed = JSON.parse(body) as { commentId?: string };
+      if (!parsed.commentId || typeof parsed.commentId !== "string") {
+        json(res, 400, { error: "commentId required" });
         return;
       }
-      const plan = await store.decidePlan(parsed.id, status);
-      if (!plan) {
-        json(res, 404, { error: "no matching plan" });
-        return;
-      }
-      broker.bump();
-      log(`plan ${plan.id} ${status}`);
-      json(res, 200, plan);
+      broker.dismissNotice(parsed.commentId);
+      json(res, 200, { ok: true });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }
@@ -157,7 +167,7 @@ async function handle(
       const incoming = parseIncoming(body);
       const comment = await store.add(incoming);
       broker.bump();
-      log(`ingested comment ${comment.id} on ${comment.route}`);
+      log(`ingested comment ${comment.id} on ${comment.metadata.page}`);
       json(res, 201, { id: comment.id, status: comment.status });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
@@ -168,24 +178,14 @@ async function handle(
   json(res, 404, { error: "not found" });
 }
 
-function decisionToStatus(decision: string | undefined): "approved" | "rejected" | null {
-  switch (decision) {
-    case "approve":
-      return "approved";
-    case "reject":
-      return "rejected";
-    default:
-      return null;
-  }
-}
-
 async function snapshot(store: CommentStore, broker: Broker) {
   return {
     version: broker.currentVersion,
     lastPolledAt: broker.lastPolledAt,
     comments: await store.list(),
-    plan: await store.getPlan(),
-    lease: await store.getLease(),
+    expectedSession: broker.expectedSession,
+    watching: broker.isBoundAlive(BOUND_TTL_MS),
+    notices: broker.pendingNotices,
   };
 }
 

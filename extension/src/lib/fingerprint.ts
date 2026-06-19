@@ -1,76 +1,37 @@
-import type { Fingerprint } from "../types.js";
-
-const STYLE_KEYS = [
-  "display",
-  "color",
-  "backgroundColor",
-  "fontFamily",
-  "fontSize",
-  "fontWeight",
-  "padding",
-  "margin",
-  "borderRadius",
-];
-
-export function captureFingerprint(el: Element): Fingerprint {
-  const rect = el.getBoundingClientRect();
+export function captureElement(el: Element): { operator: string; elementText: string } {
   return {
-    selector: buildSelector(el),
-    innerText: (el.textContent ?? "").trim().slice(0, 120),
-    styles: pickStyles(el),
-    rect: {
-      x: Math.round(rect.x),
-      y: Math.round(rect.y),
-      w: Math.round(rect.width),
-      h: Math.round(rect.height),
-    },
+    operator: buildXPath(el),
+    elementText: (el.textContent ?? "").trim().slice(0, 120),
   };
 }
 
-function pickStyles(el: Element): Record<string, string> {
-  const computed = getComputedStyle(el);
-  const out: Record<string, string> = {};
-  for (const key of STYLE_KEYS) {
-    out[key] = computed.getPropertyValue(toKebab(key));
-  }
-  return out;
-}
-
-function toKebab(value: string): string {
-  return value.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
-}
-
-function buildSelector(el: Element): string {
+function buildXPath(el: Element): string {
   const parts: string[] = [];
   let node: Element | null = el;
-  while (node && node.nodeType === Node.ELEMENT_NODE) {
-    const id = node.id ? `#${CSS.escape(node.id)}` : null;
-    if (id && isUnique(id)) {
-      parts.unshift(id);
-      break;
+  while (node && node !== document.documentElement) {
+    if (node.id) {
+      parts.unshift(`//*[@id="${escapeId(node.id)}"]`);
+      return parts.join("/");
     }
-    parts.unshift(`${node.tagName.toLowerCase()}:nth-child(${childIndex(node)})`);
-    const candidate = parts.join(" > ");
-    if (isUnique(candidate)) return candidate;
+    parts.unshift(`${node.tagName.toLowerCase()}[${sameTagIndex(node)}]`);
     node = node.parentElement;
   }
-  return parts.join(" > ");
+  if (node === document.documentElement) {
+    parts.unshift("html");
+  }
+  return `/${parts.join("/")}`;
 }
 
-function childIndex(el: Element): number {
+function sameTagIndex(el: Element): number {
   let index = 1;
   let sibling = el.previousElementSibling;
   while (sibling) {
-    index++;
+    if (sibling.tagName === el.tagName) index++;
     sibling = sibling.previousElementSibling;
   }
   return index;
 }
 
-function isUnique(selector: string): boolean {
-  try {
-    return document.querySelectorAll(selector).length === 1;
-  } catch {
-    return false;
-  }
+function escapeId(id: string): string {
+  return id.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }

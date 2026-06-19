@@ -11,11 +11,11 @@ let server: IngestServer;
 let root: string;
 
 const validBody = JSON.stringify({
-  kind: "comment",
+  comment: "tweak this",
+  operation: { type: "comment", property: null, from: null, to: null },
+  operator: "/html/body/main[1]",
   url: "http://localhost:3000/",
-  text: "tweak this",
-  fingerprint: { selector: ".x", innerText: "hi", styles: {}, rect: { x: 0, y: 0, w: 1, h: 1 } },
-  viewport: { w: 800, h: 600 },
+  metadata: { page: "/", viewport: { w: 800, h: 600 }, elementText: "hi" },
 });
 
 interface Reply {
@@ -115,7 +115,7 @@ test("rejects a comment missing required fields", async () => {
     "POST",
     "/comments",
     { Host: loopbackHost(), Origin: ext, "Content-Type": "application/json" },
-    JSON.stringify({ text: "no fingerprint" }),
+    JSON.stringify({ comment: "no operator or metadata" }),
   );
   assert.equal(res.status, 400);
 });

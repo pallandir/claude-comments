@@ -1,19 +1,16 @@
-import type { PlanView, QueueStatus } from "../messages.js";
+import type { DeferralNotice, QueueStatus } from "../messages.js";
 import type { Surface } from "./surface.js";
 
 export type ToolId = "select" | "comment" | "color" | "text";
 export type Mode = "local" | "remote";
 
 const POS_KEY = "cc-toolbar-pos";
-const WATCH_COMMAND = "/loop /comments";
 
 export interface ToolbarHandlers {
   onComments: () => void;
   onHandoff: () => void;
   onReset: () => void;
-  onReconnect: () => void;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
+  onDismissNotice: (commentId: string) => void;
 }
 
 export interface ToolbarState {
@@ -21,7 +18,7 @@ export interface ToolbarState {
   count: number;
   status: QueueStatus | null;
   drawerOpen: boolean;
-  checking: boolean;
+  sessionId: string | null;
 }
 
 export class Toolbar {
@@ -29,9 +26,6 @@ export class Toolbar {
   private readonly panel: HTMLElement;
   private readonly commentsBtn: HTMLButtonElement;
   private readonly handoffBtn: HTMLButtonElement;
-  private readonly connBtn: HTMLButtonElement;
-  private readonly connSep: HTMLElement;
-  private readonly connLabel: HTMLElement;
   private readonly handlers: ToolbarHandlers;
   private panelKey = "";
 
@@ -50,14 +44,6 @@ export class Toolbar {
     grip.dataset.tip = "Drag to move";
     this.makeDraggable(grip);
 
-    this.connBtn = document.createElement("button");
-    this.connBtn.type = "button";
-    this.connBtn.className = "cc-conn cc-has-tip";
-    this.connBtn.addEventListener("click", () => handlers.onReconnect());
-    this.connLabel = document.createElement("span");
-    this.connLabel.className = "cc-conn-label";
-    this.connBtn.append(icon(ICON_ROTATE_CW, "cc-conn-icon"), this.connLabel);
-
     this.commentsBtn = action("💬 Comments", "Open the comments panel", () =>
       handlers.onComments(),
     );
@@ -73,18 +59,7 @@ export class Toolbar {
     resetBtn.append(icon(ICON_TRASH, "cc-action-glyph"));
     resetBtn.addEventListener("click", () => handlers.onReset());
 
-    this.connSep = sep();
-
-    this.root.append(
-      this.panel,
-      grip,
-      this.commentsBtn,
-      sep(),
-      this.handoffBtn,
-      resetBtn,
-      this.connSep,
-      this.connBtn,
-    );
+    this.root.append(this.panel, grip, this.commentsBtn, sep(), this.handoffBtn, resetBtn);
     surface.append(this.root);
     void this.restorePosition();
   }
@@ -98,39 +73,28 @@ export class Toolbar {
     this.commentsBtn.textContent = `💬 Comments (${state.count})`;
 
     if (state.mode === "remote") {
-      this.connBtn.hidden = true;
-      this.connSep.hidden = true;
       this.handoffBtn.classList.add("cc-action--primary");
       this.setPanel("remote", () => remotePanel());
       return;
     }
 
-    this.connBtn.hidden = false;
-    this.connSep.hidden = false;
-
     const status = state.status;
     const reachable = Boolean(status?.serverReachable);
     const watching = Boolean(status?.watching);
-    const connected = reachable && !state.checking;
 
-    this.connBtn.classList.toggle("cc-conn--on", connected && watching);
-    this.connBtn.classList.toggle("cc-conn--idle", connected && !watching);
-    this.connBtn.classList.toggle("cc-conn--off", !reachable && !state.checking);
-    this.connBtn.classList.toggle("cc-conn--checking", state.checking);
-    this.connLabel.textContent = connText(reachable, watching, state.checking);
-    this.connBtn.dataset.tip = connTip(reachable, watching, state.checking);
+    this.handoffBtn.classList.toggle("cc-action--primary", !reachable);
 
-    this.handoffBtn.classList.toggle("cc-action--primary", !connected);
-
-    const plan = status?.plan ?? null;
-    if (plan && (plan.status === "proposed" || plan.status === "approved")) {
-      this.setPanel(`plan:${plan.id}:${plan.status}:${plan.items.length}`, () =>
-        this.planPanel(plan),
+    const notices = status?.notices ?? [];
+    if (notices.length > 0) {
+      this.setPanel(`notices:${notices.map((n) => n.commentId).join(",")}`, () =>
+        this.noticePanel(notices),
       );
     } else if (!reachable) {
-      this.setPanel("setup:server", () => setupPanel("server", null));
+      this.setPanel("setup:server", () => setupPanel(false, false, null, state.sessionId));
     } else if (!watching) {
-      this.setPanel("setup:watch", () => setupPanel("watch", status?.root ?? null));
+      this.setPanel("setup:watch", () =>
+        setupPanel(true, false, status?.root ?? null, state.sessionId),
+      );
     } else {
       this.clearPanel();
     }
@@ -150,52 +114,47 @@ export class Toolbar {
     this.panel.hidden = true;
   }
 
-  private planPanel(plan: PlanView): HTMLElement {
+  private noticePanel(notices: DeferralNotice[]): HTMLElement {
     const wrap = document.createElement("div");
-    wrap.className = "cc-approve";
+    wrap.className = "cc-notices";
 
     const title = document.createElement("div");
-    title.className = "cc-approve-title";
-    const n = plan.items.length;
+    title.className = "cc-notices-title";
     title.textContent =
-      plan.status === "approved"
-        ? `Applying ${n} change${n === 1 ? "" : "s"}…`
-        : `Claude proposed ${n} change${n === 1 ? "" : "s"}`;
+      notices.length === 1 ? "1 comment needs a plan" : `${notices.length} comments need a plan`;
     wrap.append(title);
 
-    const list = document.createElement("ul");
-    list.className = "cc-approve-list";
-    for (const item of plan.items.slice(0, 6)) {
-      const li = document.createElement("li");
-      const file = document.createElement("code");
-      file.textContent = item.file;
-      li.append(file, document.createTextNode(` ${item.summary}`));
-      list.append(li);
-    }
-    if (plan.items.length > 6) {
-      const more = document.createElement("li");
-      more.className = "cc-approve-more";
-      more.textContent = `+${plan.items.length - 6} more`;
-      list.append(more);
-    }
-    wrap.append(list);
+    for (const notice of notices) {
+      const row = document.createElement("div");
+      row.className = "cc-notice-row";
 
-    if (plan.status === "proposed") {
-      const actions = document.createElement("div");
-      actions.className = "cc-approve-actions";
-      const apply = document.createElement("button");
-      apply.type = "button";
-      apply.className = "cc-action cc-action--primary";
-      apply.textContent = "Apply";
-      apply.addEventListener("click", () => this.handlers.onApprove(plan.id));
-      const reject = document.createElement("button");
-      reject.type = "button";
-      reject.className = "cc-action cc-action--ghost";
-      reject.textContent = "Reject";
-      reject.addEventListener("click", () => this.handlers.onReject(plan.id));
-      actions.append(apply, reject);
-      wrap.append(actions);
+      const body = document.createElement("div");
+      body.className = "cc-notice-body";
+
+      const route = document.createElement("code");
+      route.className = "cc-notice-route";
+      route.textContent = notice.page;
+
+      const summary = document.createElement("div");
+      summary.className = "cc-notice-summary";
+      summary.textContent = notice.summary;
+
+      const hint = document.createElement("div");
+      hint.className = "cc-notice-hint";
+      hint.textContent = "Understood, needs a plan. Discuss in chat.";
+
+      body.append(route, summary, hint);
+
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.className = "cc-action cc-action--ghost cc-notice-dismiss";
+      dismiss.textContent = "Dismiss";
+      dismiss.addEventListener("click", () => this.handlers.onDismissNotice(notice.commentId));
+
+      row.append(body, dismiss);
+      wrap.append(row);
     }
+
     return wrap;
   }
 
@@ -245,8 +204,6 @@ export class Toolbar {
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-const ICON_ROTATE_CW = ["M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8", "M21 3v5h-5"];
-
 const ICON_TRASH = [
   "M10 11v6",
   "M14 11v6",
@@ -289,7 +246,12 @@ function sep(): HTMLElement {
   return el;
 }
 
-function setupPanel(step: "server" | "watch", root: string | null): HTMLElement {
+function setupPanel(
+  reachable: boolean,
+  watching: boolean,
+  root: string | null,
+  sessionId: string | null,
+): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "cc-setup";
 
@@ -298,15 +260,13 @@ function setupPanel(step: "server" | "watch", root: string | null): HTMLElement 
   title.textContent = "Set up auto-pickup";
   wrap.append(title);
 
-  wrap.append(
-    setupRow(true, "Comment on the page", "Click anything and leave a note."),
-    setupRow(
-      step === "watch",
-      "Project connected",
-      root ? short(root) : "Start Redline in your editor.",
-    ),
-    watchRow(step === "watch"),
-  );
+  const projectHint = reachable
+    ? root
+      ? short(root)
+      : "Waiting for Claude…"
+    : "Start Redline in your editor.";
+
+  wrap.append(watchRow(sessionId), setupRow(watching, "Project connected", projectHint));
   return wrap;
 }
 
@@ -328,7 +288,7 @@ function setupRow(done: boolean, label: string, hint: string): HTMLElement {
   return row;
 }
 
-function watchRow(ready: boolean): HTMLElement {
+function watchRow(sessionId: string | null): HTMLElement {
   const row = document.createElement("div");
   row.className = "cc-setup-row";
   const mark = document.createElement("span");
@@ -337,29 +297,29 @@ function watchRow(ready: boolean): HTMLElement {
   const body = document.createElement("div");
   const strong = document.createElement("div");
   strong.className = "cc-setup-label";
-  strong.textContent = "Turn on auto-pickup";
-  const cmd = document.createElement("div");
-  cmd.className = "cc-setup-cmd";
-  const code = document.createElement("code");
-  code.textContent = WATCH_COMMAND;
+  strong.textContent = "Pair with Claude";
+
+  const cmdRow = document.createElement("div");
+  cmdRow.className = "cc-setup-cmd cc-setup-id";
+  const cmdCode = document.createElement("code");
+  cmdCode.textContent = sessionId ? `/redline ${sessionId}` : "loading…";
   const copy = document.createElement("button");
   copy.type = "button";
   copy.className = "cc-copy";
   copy.textContent = "Copy";
   copy.addEventListener("click", () => {
-    void navigator.clipboard?.writeText(WATCH_COMMAND);
+    void navigator.clipboard?.writeText(sessionId ? `/redline ${sessionId}` : "");
     copy.textContent = "Copied";
     window.setTimeout(() => {
       copy.textContent = "Copy";
     }, 1400);
   });
-  cmd.append(code, copy);
+  cmdRow.append(cmdCode, copy);
+
   const sub = document.createElement("div");
   sub.className = "cc-setup-hint";
-  sub.textContent = ready
-    ? "Connected. Paste this once in Claude Code to pick up comments automatically."
-    : "Paste this in Claude Code once the project is connected.";
-  body.append(strong, cmd, sub);
+  sub.textContent = "Paste into Claude to start.";
+  body.append(strong, cmdRow, sub);
   row.append(mark, body);
   return row;
 }
@@ -380,17 +340,4 @@ function remotePanel(): HTMLElement {
 function short(root: string): string {
   const parts = root.replace(/\/+$/, "").split("/");
   return parts[parts.length - 1] || root;
-}
-
-function connText(reachable: boolean, watching: boolean, checking: boolean): string {
-  if (checking) return "Checking";
-  if (!reachable) return "Assistant off";
-  return watching ? "Watching" : "Connected";
-}
-
-function connTip(reachable: boolean, watching: boolean, checking: boolean): string {
-  if (checking) return "Checking for your AI assistant";
-  if (!reachable) return "Start Redline's server in your editor, then click to retry.";
-  if (!watching) return `Connected. Run ${WATCH_COMMAND} in Claude Code to pick up comments.`;
-  return "A watch session is picking up your comments. Click to re-check.";
 }

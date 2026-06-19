@@ -1,10 +1,10 @@
-import type { StyleChange } from "../types.js";
+import type { Operation } from "../types.js";
 import type { Surface } from "./surface.js";
 
 export function openColorPanel(
   surface: Surface,
   el: HTMLElement,
-  commit: (changes: StyleChange[], summary: string) => void,
+  commit: (operation: Operation, summary: string) => void,
   cancel: () => void,
 ): void {
   const computed = getComputedStyle(el);
@@ -42,16 +42,31 @@ export function openColorPanel(
     cancel();
   });
   save.addEventListener("click", () => {
-    const changes: StyleChange[] = [];
-    if (colorInput.value && rgbToHex(fromColor) !== colorInput.value) {
-      changes.push({ property: "color", from: fromColor, to: colorInput.value });
-    }
-    if (bgInput.value && rgbToHex(fromBg) !== bgInput.value) {
-      changes.push({ property: "background-color", from: fromBg, to: bgInput.value });
-    }
+    const colorChanged = Boolean(colorInput.value) && rgbToHex(fromColor) !== colorInput.value;
+    const bgChanged = Boolean(bgInput.value) && rgbToHex(fromBg) !== bgInput.value;
     teardown();
-    if (changes.length) commit(changes, describeStyleChanges(changes));
-    else cancel();
+    if (!colorChanged && !bgChanged) {
+      cancel();
+      return;
+    }
+    const primary = colorChanged
+      ? { property: "color", from: fromColor, to: colorInput.value }
+      : { property: "background-color", from: fromBg, to: bgInput.value };
+    const operation: Operation = {
+      type: "style",
+      property: primary.property,
+      from: primary.from,
+      to: primary.to,
+    };
+    const summary = describeChanges(
+      colorChanged,
+      bgChanged,
+      fromColor,
+      colorInput.value,
+      fromBg,
+      bgInput.value,
+    );
+    commit(operation, summary);
   });
 
   surface.append(panel);
@@ -151,11 +166,17 @@ function selectAll(el: Element): void {
   sel?.addRange(range);
 }
 
-function describeStyleChanges(changes: StyleChange[]): string {
-  const parts = changes.map((change) => {
-    const label = change.property === "background-color" ? "background" : "text color";
-    return `${label} from ${toHex(change.from)} to ${toHex(change.to)}`;
-  });
+function describeChanges(
+  colorChanged: boolean,
+  bgChanged: boolean,
+  fromColor: string,
+  toColor: string,
+  fromBg: string,
+  toBg: string,
+): string {
+  const parts: string[] = [];
+  if (colorChanged) parts.push(`text color from ${toHex(fromColor)} to ${toHex(toColor)}`);
+  if (bgChanged) parts.push(`background from ${toHex(fromBg)} to ${toHex(toBg)}`);
   return `Change ${parts.join(" and ")}`;
 }
 
