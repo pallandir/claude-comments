@@ -16,6 +16,7 @@ import {
   update,
 } from "./lib/transport.js";
 import type { Message, PinModel, QueueStatus, Response } from "./messages.js";
+import type { SourceLocation } from "./types.js";
 
 const FLUSH_ALARM = "redline-flush";
 const ACTIVE_KEY = "cc-active";
@@ -158,6 +159,8 @@ async function pagePins(url: string): Promise<PinModel[]> {
         status: "pending",
         kind: q.kind,
         removable: true,
+        route: routeOf(q.url),
+        target: targetLabel(q.fingerprint.selector, q.source, q.fingerprint.innerText),
       }),
     ),
     ...synced.map(
@@ -168,7 +171,39 @@ async function pagePins(url: string): Promise<PinModel[]> {
         status: s.status,
         kind: s.kind,
         removable: false,
+        route: s.route ?? routeOf(s.url),
+        target: targetLabel(
+          s.fingerprint.selector,
+          s.source ?? null,
+          s.fingerprint.innerText ?? "",
+        ),
       }),
     ),
   ];
+}
+
+function routeOf(url: string): string {
+  try {
+    return new URL(url).pathname || "/";
+  } catch {
+    return url;
+  }
+}
+
+function targetLabel(selector: string, source: SourceLocation | null, innerText: string): string {
+  if (source?.path) {
+    const base = source.path.split(/[\\/]/).pop() ?? source.path;
+    const name = base.replace(/\.[^.]+$/, "");
+    if (name) return name;
+  }
+  const tag = lastTag(selector);
+  const text = innerText.trim();
+  return text ? `${tag} · ${text.length > 22 ? `${text.slice(0, 22)}…` : text}` : tag;
+}
+
+function lastTag(selector: string): string {
+  const part = selector.split(">").pop()?.trim() ?? "";
+  if (part.startsWith("#")) return part;
+  const match = part.match(/^([a-zA-Z][\w-]*)/);
+  return match ? `<${match[1]}>` : "element";
 }

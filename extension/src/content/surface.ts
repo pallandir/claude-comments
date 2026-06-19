@@ -39,7 +39,7 @@ export class Surface {
   private composerAnchor: Element | null = null;
   private actionMenu: HTMLElement | null = null;
   private actionCleanup: (() => void) | null = null;
-  private rafQueued = false;
+  private rafId = 0;
 
   constructor() {
     this.host = document.createElement("div");
@@ -48,10 +48,6 @@ export class Surface {
     const style = document.createElement("style");
     style.textContent = overlayCss;
     this.shadow.append(style);
-
-    const onMove = () => this.scheduleReposition();
-    window.addEventListener("scroll", onMove, { passive: true, capture: true });
-    window.addEventListener("resize", onMove, { passive: true });
   }
 
   mount(): void {
@@ -60,6 +56,8 @@ export class Surface {
 
   unmount(): void {
     this.closeActionMenu();
+    if (this.rafId) cancelAnimationFrame(this.rafId);
+    this.rafId = 0;
     this.host.remove();
   }
 
@@ -109,6 +107,7 @@ export class Surface {
       this.shadow.append(this.selectionBox);
     }
     place(this.selectionBox, target);
+    this.startTicker();
   }
 
   selected(): Element | null {
@@ -273,6 +272,7 @@ export class Surface {
     this.composer = panel;
     this.shadow.append(highlight, panel);
     this.reposition();
+    this.startTicker();
     textarea.focus();
   }
 
@@ -305,6 +305,7 @@ export class Surface {
       return { model, el: wrap, anchor: resolve(model.selector) };
     });
     this.reposition();
+    this.startTicker();
   }
 
   private closeComposer(): void {
@@ -315,13 +316,21 @@ export class Surface {
     this.composerAnchor = null;
   }
 
-  private scheduleReposition(): void {
-    if (this.rafQueued) return;
-    this.rafQueued = true;
-    requestAnimationFrame(() => {
-      this.rafQueued = false;
+  // Anchors (pins, the selection box, the composer) ride DOM elements that can
+  // move for reasons no scroll/resize event reports: transform-based scrolling,
+  // animations, async layout shifts. A per-frame reconcile keeps them glued; it
+  // self-stops once nothing is being tracked, so it costs nothing when idle.
+  private startTicker(): void {
+    if (this.rafId || !this.host.isConnected) return;
+    const tick = () => {
       this.reposition();
-    });
+      this.rafId = this.hasTracked() ? requestAnimationFrame(tick) : 0;
+    };
+    this.rafId = requestAnimationFrame(tick);
+  }
+
+  private hasTracked(): boolean {
+    return this.pins.length > 0 || this.selectionEl !== null || this.composerAnchor !== null;
   }
 
   private reposition(): void {

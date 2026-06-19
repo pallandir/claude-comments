@@ -1,5 +1,5 @@
 import type { PinStatus, PlanView, QueueStatus } from "../messages.js";
-import type { DraftRequest, QueuedRequest, RequestKind } from "../types.js";
+import type { DraftRequest, QueuedRequest, RequestKind, SourceLocation } from "../types.js";
 
 const QUEUE_KEY = "redline-queue";
 const PORTS = [7474, 7475, 7476];
@@ -9,10 +9,12 @@ const WATCH_TTL_MS = 35_000;
 export interface ServerComment {
   id: string;
   url: string;
+  route?: string;
   text: string;
   status: PinStatus;
   kind: RequestKind;
-  fingerprint: { selector: string };
+  source?: SourceLocation | null;
+  fingerprint: { selector: string; innerText?: string };
 }
 
 interface Lease {

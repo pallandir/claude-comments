@@ -372,7 +372,7 @@ function remotePanel(): HTMLElement {
   title.textContent = "Remote page";
   const sub = document.createElement("div");
   sub.className = "cc-setup-hint";
-  sub.textContent = "Comment freely, then click Handoff to export a file for your developer.";
+  sub.textContent = "Comment freely, then click Handoff to export a file for your developers.";
   wrap.append(title, sub);
   return wrap;
 }

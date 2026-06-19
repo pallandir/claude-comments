@@ -21,6 +21,19 @@
   box-sizing: border-box;
 }
 
+/* Author display rules outrank the UA [hidden] rule, so hidden toolbar
+   controls (the reconnect button on remote pages) would otherwise stay
+   visible. Re-assert it. */
+[hidden] {
+  display: none !important;
+}
+
+/* An empty data-tip would render as a small floating dot on hover. */
+.cc-has-tip:not([data-tip])::after,
+.cc-has-tip[data-tip=""]::after {
+  content: none;
+}
+
 /* Inspector boxes */
 .cc-hover {
   position: absolute;
@@ -714,23 +727,20 @@
   transform: translateX(-50%) translateY(0);
 }
 
-/* Comments drawer: floating, scrollable, animated */
+/* Comments drawer: floating, scrollable, animated. The wrapper stacks two
+   cards (the comment list and a smaller hints card) and carries the slide-in. */
 .cc-drawer {
   position: fixed;
   top: 80px;
   right: 16px;
   width: 312px;
-  max-height: 62vh;
+  max-height: calc(100vh - 120px);
   z-index: 2147483646;
   display: flex;
   flex-direction: column;
-  background: var(--cc-bg);
-  color: var(--cc-text);
+  gap: 10px;
   font-family: system-ui, sans-serif;
   font-size: 13px;
-  border: 1px solid var(--cc-border);
-  border-radius: 14px;
-  box-shadow: var(--cc-shadow);
   opacity: 0;
   transform: translateX(calc(100% + 32px));
   pointer-events: none;
@@ -741,6 +751,81 @@
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
+}
+
+.cc-drawer-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--cc-bg);
+  color: var(--cc-text);
+  border: 1px solid var(--cc-border);
+  border-radius: 14px;
+  box-shadow: var(--cc-shadow);
+}
+
+.cc-hints {
+  align-self: flex-end;
+  width: 288px;
+  background: var(--cc-muted);
+  color: var(--cc-text);
+  border: 1px solid var(--cc-border);
+  border-radius: 12px;
+  box-shadow: var(--cc-shadow);
+  overflow: hidden;
+  animation: cc-fade-in 0.22s var(--cc-ease);
+}
+
+.cc-hints-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--cc-text);
+  font: 600 12.5px system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cc-hints-chevron {
+  flex: none;
+  color: var(--cc-text-2);
+  transition: transform 0.2s var(--cc-ease);
+}
+
+.cc-hints--open .cc-hints-chevron {
+  transform: rotate(90deg);
+}
+
+.cc-hints-body {
+  padding: 0 14px 12px;
+}
+
+.cc-hints-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.cc-hints-steps li {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--cc-text-2);
+}
+
+.cc-hints-steps code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--cc-bg);
+  color: var(--cc-text);
 }
 
 .cc-drawer-head {
@@ -774,7 +859,8 @@
 }
 
 .cc-drawer-list {
-  flex: 1;
+  flex: 0 1 auto;
+  max-height: 300px;
   overflow-y: auto;
   padding: 6px 14px 14px;
 }
@@ -803,11 +889,24 @@
 }
 
 .cc-drawer-tag {
+  flex: none;
   font-size: 11px;
   font-weight: 600;
   color: var(--cc-text-2);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.cc-drawer-target {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--cc-text-2);
 }
 
 .cc-drawer-text {

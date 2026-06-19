@@ -2,7 +2,7 @@ import { captureFingerprint } from "../lib/fingerprint.js";
 import { resolveSource } from "../lib/source-map.js";
 import type { Message, PinModel, QueueStatus, Response } from "../messages.js";
 import type { DraftRequest, Rect, RequestKind, StyleChange, TextChange } from "../types.js";
-import { Drawer } from "./drawer.js";
+import { Drawer, type DrawerContext } from "./drawer.js";
 import { downloadHandoff } from "./handoff.js";
 import { Surface } from "./surface.js";
 import { type Mode, type ToolId, Toolbar } from "./toolbar.js";
@@ -168,9 +168,9 @@ function init(): void {
       openColorPanel(
         surface,
         el as HTMLElement,
-        (changes) => {
+        (changes, summary) => {
           done();
-          void record("style", el, { text: "Change color", styleChanges: changes });
+          void record("style", el, { text: summary, styleChanges: changes });
         },
         done,
       );
@@ -180,7 +180,8 @@ function init(): void {
         el as HTMLElement,
         (from, to) => {
           done();
-          void record("text", el, { text: `Set text to "${to}"`, textChange: { from, to } });
+          const text = from ? `Change text from "${from}" to "${to}"` : `Set text to "${to}"`;
+          void record("text", el, { text, textChange: { from, to } });
         },
         done,
       );
@@ -189,8 +190,16 @@ function init(): void {
 
   function toggleDrawer(): void {
     drawerOpen = !drawerOpen;
-    drawer?.setOpen(drawerOpen, lastPins);
+    drawer?.setOpen(drawerOpen, lastPins, drawerCtx());
     render();
+  }
+
+  function drawerCtx(): DrawerContext {
+    return {
+      mode,
+      connected: Boolean(lastStatus?.serverReachable) && !checking,
+      watching: Boolean(lastStatus?.watching),
+    };
   }
 
   interface RecordPayload {
@@ -332,7 +341,7 @@ function init(): void {
 
   function render(): void {
     toolbar?.render({ mode, count: lastPins.length, status: lastStatus, drawerOpen, checking });
-    drawer?.render(lastPins);
+    drawer?.render(lastPins, drawerCtx());
   }
 
   function updateCursor(): void {

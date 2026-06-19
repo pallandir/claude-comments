@@ -24,6 +24,20 @@ honored with no further typing. A bare `/comments` (no loop) does a single pass:
 it proposes a plan and stops; it cannot see a later browser approval, so in that
 mode approve in chat instead.
 
+**Never replace `wait_for_update` with a timed or scheduled poll.** The tick is:
+`wait_for_update` -> act -> loop straight back into `wait_for_update`. Do not
+self-pace, do not arm a fallback heartbeat, do not `ScheduleWakeup` a later
+"re-poll". The broker wakes you the instant a comment syncs, so a fixed-interval
+fallback only opens a blind window where synced comments sit unseen (this is the
+bug where a comment shows `synced` in the UI but is never picked up). If the loop
+is running, you are already caught up.
+
+**There is no "Send" button, and nothing for the user to sync by hand.** A
+comment reaches the store the moment the user clicks Save in the composer; on a
+local URL it hits the server immediately. Never tell the user to "send", "sync",
+or "submit" a comment. Surface approval through `propose_plan` (its browser Apply
+button) or "go" in chat, never a chat-only plan-mode prompt that stalls the loop.
+
 **Default behavior is still plan-then-approve.** You propose; nothing is edited
 or resolved until the user approves (Apply in the toolbar, or "go" in chat).
 Picking up comments never silently turns into editing.

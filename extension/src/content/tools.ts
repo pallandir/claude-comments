@@ -4,7 +4,7 @@ import type { Surface } from "./surface.js";
 export function openColorPanel(
   surface: Surface,
   el: HTMLElement,
-  commit: (changes: StyleChange[]) => void,
+  commit: (changes: StyleChange[], summary: string) => void,
   cancel: () => void,
 ): void {
   const computed = getComputedStyle(el);
@@ -50,7 +50,7 @@ export function openColorPanel(
       changes.push({ property: "background-color", from: fromBg, to: bgInput.value });
     }
     teardown();
-    if (changes.length) commit(changes);
+    if (changes.length) commit(changes, describeStyleChanges(changes));
     else cancel();
   });
 
@@ -64,7 +64,8 @@ export function openTextEditor(
   commit: (from: string, to: string) => void,
   cancel: () => void,
 ): void {
-  const from = (el.textContent ?? "").trim();
+  const original = el.textContent ?? "";
+  const from = original.trim();
 
   const hint = document.createElement("div");
   hint.className = "cc-tool-hint";
@@ -73,21 +74,26 @@ export function openTextEditor(
   positionNear(hint, el);
 
   el.setAttribute("contenteditable", "true");
-  (el as HTMLElement).focus();
+  el.focus();
   selectAll(el);
 
   let done = false;
+  const cleanup = () => {
+    el.removeEventListener("keydown", onKey);
+    el.removeEventListener("blur", onBlur);
+    document.removeEventListener("pointerdown", onOutside, true);
+    el.removeAttribute("contenteditable");
+    hint.remove();
+  };
   const finish = (saveIt: boolean) => {
     if (done) return;
     done = true;
-    el.removeEventListener("keydown", onKey);
-    el.removeAttribute("contenteditable");
-    hint.remove();
+    cleanup();
     const to = (el.textContent ?? "").trim();
-    if (saveIt && to !== from) {
+    if (saveIt && to && to !== from) {
       commit(from, to);
     } else {
-      if (!saveIt) el.textContent = from;
+      el.textContent = original;
       cancel();
     }
   };
@@ -100,8 +106,14 @@ export function openTextEditor(
       finish(false);
     }
   };
+  const onBlur = () => finish(true);
+  const onOutside = (event: Event) => {
+    const target = event.target as Node | null;
+    if (target && !el.contains(target)) finish(true);
+  };
   el.addEventListener("keydown", onKey);
-  el.addEventListener("blur", () => finish(true), { once: true });
+  el.addEventListener("blur", onBlur, { once: true });
+  document.addEventListener("pointerdown", onOutside, true);
 }
 
 function field(
@@ -137,6 +149,18 @@ function selectAll(el: Element): void {
   const sel = window.getSelection();
   sel?.removeAllRanges();
   sel?.addRange(range);
+}
+
+function describeStyleChanges(changes: StyleChange[]): string {
+  const parts = changes.map((change) => {
+    const label = change.property === "background-color" ? "background" : "text color";
+    return `${label} from ${toHex(change.from)} to ${toHex(change.to)}`;
+  });
+  return `Change ${parts.join(" and ")}`;
+}
+
+function toHex(value: string): string {
+  return value.startsWith("#") ? value.toLowerCase() : rgbToHex(value);
 }
 
 function rgbToHex(rgb: string): string {

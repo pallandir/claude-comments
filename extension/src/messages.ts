@@ -9,6 +9,8 @@ export interface PinModel {
   status: PinStatus;
   kind: RequestKind;
   removable: boolean;
+  route: string;
+  target: string;
 }
 
 export type PlanStatus = "proposed" | "approved" | "rejected" | "applied";
