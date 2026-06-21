@@ -14,6 +14,8 @@
     "tmp": "^0.2.7"
   },
   "scripts": {
+    "setup": "bash scripts/setup.sh",
+    "update": "bash scripts/update.sh",
     "build": "npm run build --workspaces --if-present",
     "dev": "npm run dev --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
