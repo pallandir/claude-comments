@@ -1,6 +1,12 @@
 import type { DraftRequest, OperationType, QueuedRequest, Rect } from "./types.js";
 
-export type PinStatus = "pending" | "open" | "resolved" | "wontfix";
+export type PinStatus = "pending" | "open" | "processing" | "resolved" | "wontfix";
+
+export interface PinOperation {
+  property: string | null;
+  from: string | null;
+  to: string | null;
+}
 
 export interface PinModel {
   key: string;
@@ -11,6 +17,7 @@ export interface PinModel {
   removable: boolean;
   route: string;
   target: string;
+  operation?: PinOperation;
 }
 
 export interface DeferralNotice {
@@ -18,6 +25,18 @@ export interface DeferralNotice {
   page: string;
   summary: string;
   createdAt: string;
+}
+
+export interface PageRating {
+  id: string;
+  status: "pending" | "scored";
+  result?: {
+    score: number;
+    ui: number;
+    ux: number;
+    coherence: number;
+    notes: string;
+  };
 }
 
 export type Message =
@@ -34,7 +53,8 @@ export type Message =
   | { type: "flush" }
   | { type: "dismiss-notice"; commentId: string }
   | { type: "queue-status" }
-  | { type: "reset-session" };
+  | { type: "request-rating"; url: string; screenshotDataUrl: string | null }
+  | { type: "reopen-comment"; id: string; note?: string };
 
 export interface QueueStatus {
   queued: number;
@@ -44,6 +64,8 @@ export interface QueueStatus {
   watching?: boolean;
   notices?: DeferralNotice[];
   sessionId?: string;
+  version?: number | null;
+  rating?: PageRating | null;
 }
 
 export type Response =

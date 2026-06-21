@@ -1,4 +1,5 @@
-import type { PinModel } from "../messages.js";
+import type { PageRating, PinModel } from "../messages.js";
+import { ICON_CLOSE, icon } from "./icons.js";
 import type { Surface } from "./surface.js";
 import type { Mode } from "./toolbar.js";
 
@@ -6,6 +7,8 @@ export interface DrawerHandlers {
   onEdit: (cid: string, text: string) => void;
   onRemove: (key: string) => void;
   onClose: () => void;
+  onRevert: (key: string) => void;
+  onHoverComment: (key: string | null) => void;
 }
 
 export interface DrawerContext {
@@ -18,44 +21,44 @@ const DEFAULT_CTX: DrawerContext = { mode: "remote", connected: false, watching:
 
 export class Drawer {
   private readonly root: HTMLElement;
+  private readonly rankEl: HTMLElement;
   private readonly listEl: HTMLElement;
-  private readonly hintsEl: HTMLElement;
+  private readonly tabsEl: HTMLElement;
   private readonly handlers: DrawerHandlers;
   private open = false;
   private pins: PinModel[] = [];
   private ctx: DrawerContext = DEFAULT_CTX;
   private editing: string | null = null;
-  private hintsOpen = true;
-  private hintsPinned = false;
+  private rating: PageRating | null = null;
+  private activeTab: "comments" | "history" = "comments";
 
   constructor(surface: Surface, handlers: DrawerHandlers) {
     this.handlers = handlers;
     this.root = document.createElement("div");
     this.root.className = "cc-drawer";
 
+    this.rankEl = document.createElement("div");
+    this.rankEl.className = "cc-drawer-card cc-rank-card";
+
     const card = document.createElement("div");
     card.className = "cc-drawer-card";
 
     const head = document.createElement("div");
     head.className = "cc-drawer-head";
-    const title = document.createElement("strong");
-    title.textContent = "Comments";
+    this.tabsEl = document.createElement("div");
+    this.tabsEl.className = "cc-drawer-tabs";
     const close = document.createElement("button");
     close.type = "button";
     close.className = "cc-drawer-close";
-    close.textContent = "✕";
+    close.append(icon(ICON_CLOSE, "cc-drawer-close-icon"));
     close.addEventListener("click", () => handlers.onClose());
-    head.append(title, close);
+    head.append(this.tabsEl, close);
 
     this.listEl = document.createElement("div");
     this.listEl.className = "cc-drawer-list";
 
     card.append(head, this.listEl);
-
-    this.hintsEl = document.createElement("div");
-    this.hintsEl.className = "cc-hints";
-
-    this.root.append(card, this.hintsEl);
+    this.root.append(card, this.rankEl);
     surface.append(this.root);
   }
 
@@ -71,71 +74,128 @@ export class Drawer {
     this.render(pins, ctx);
   }
 
+  setRating(rating: PageRating | null): void {
+    this.rating = rating;
+    if (this.open) {
+      this.renderRank();
+    }
+  }
+
   render(pins: PinModel[], ctx: DrawerContext = this.ctx): void {
     this.pins = pins;
     this.ctx = ctx;
     if (!this.open) return;
+    this.renderRank();
+    this.renderTabs(pins);
     this.renderList(pins);
-    this.renderHints(pins, ctx);
   }
 
   destroy(): void {
     this.root.remove();
   }
 
+  private renderRank(): void {
+    this.rankEl.replaceChildren();
+
+    if (!this.rating) {
+      this.rankEl.hidden = true;
+      return;
+    }
+    this.rankEl.hidden = false;
+
+    const head = document.createElement("div");
+    head.className = "cc-rank-head";
+    const label = document.createElement("span");
+    label.className = "cc-rank-label";
+    label.textContent = "Website ranking";
+    head.append(label);
+
+    const result = this.rating.status === "scored" ? this.rating.result : null;
+    if (result) {
+      const score = document.createElement("span");
+      score.className = "cc-rank-score";
+      score.textContent = String(result.score);
+      const denom = document.createElement("span");
+      denom.className = "cc-rank-denom";
+      denom.textContent = "/100";
+      score.append(denom);
+      head.append(score);
+    }
+    this.rankEl.append(head);
+
+    const dims: Array<[string, number | null]> = result
+      ? [
+          ["UI", result.ui],
+          ["UX", result.ux],
+          ["Coherence", result.coherence],
+        ]
+      : [
+          ["UI", null],
+          ["UX", null],
+          ["Coherence", null],
+        ];
+
+    for (const [name, value] of dims) {
+      this.rankEl.append(scoreBar(name, value));
+    }
+  }
+
+  private renderTabs(pins: PinModel[]): void {
+    const active = pins.filter((p) => p.status !== "resolved");
+    const history = pins.filter((p) => p.status === "resolved");
+
+    this.tabsEl.replaceChildren();
+    const commentsTab = document.createElement("button");
+    commentsTab.type = "button";
+    commentsTab.className = `cc-drawer-tab${this.activeTab === "comments" ? " cc-drawer-tab--active" : ""}`;
+    commentsTab.textContent = `Comments (${active.length})`;
+    commentsTab.addEventListener("click", () => {
+      this.activeTab = "comments";
+      this.renderTabs(this.pins);
+      this.renderList(this.pins);
+    });
+    const historyTab = document.createElement("button");
+    historyTab.type = "button";
+    historyTab.className = `cc-drawer-tab${this.activeTab === "history" ? " cc-drawer-tab--active" : ""}`;
+    historyTab.textContent = `History (${history.length})`;
+    historyTab.addEventListener("click", () => {
+      this.activeTab = "history";
+      this.renderTabs(this.pins);
+      this.renderList(this.pins);
+    });
+    this.tabsEl.append(commentsTab, historyTab);
+  }
+
   private renderList(pins: PinModel[]): void {
+    const active = pins.filter((p) => p.status !== "resolved");
+    const history = pins.filter((p) => p.status === "resolved");
+
     this.listEl.replaceChildren();
-    if (pins.length === 0) {
+
+    const list = this.activeTab === "comments" ? active : history;
+
+    if (list.length === 0) {
       const empty = document.createElement("div");
       empty.className = "cc-drawer-empty";
-      empty.textContent = "No comments on this page yet.";
+      empty.textContent =
+        this.activeTab === "comments"
+          ? "No comments on this page yet."
+          : "No implemented comments yet.";
       this.listEl.append(empty);
       return;
     }
-    for (const pin of pins) this.listEl.append(this.item(pin));
-  }
 
-  private renderHints(pins: PinModel[], ctx: DrawerContext): void {
-    if (!this.hintsPinned) this.hintsOpen = pins.length === 0;
-    const guide = helpFor(ctx);
-
-    this.hintsEl.replaceChildren();
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "cc-hints-toggle";
-    const label = document.createElement("span");
-    label.textContent = guide.title;
-    const chevron = document.createElement("span");
-    chevron.className = "cc-hints-chevron";
-    chevron.textContent = "›";
-    toggle.append(label, chevron);
-    toggle.addEventListener("click", () => {
-      this.hintsPinned = true;
-      this.hintsOpen = !this.hintsOpen;
-      this.renderHints(this.pins, this.ctx);
-    });
-
-    this.hintsEl.classList.toggle("cc-hints--open", this.hintsOpen);
-    this.hintsEl.append(toggle);
-
-    if (!this.hintsOpen) return;
-
-    const body = document.createElement("div");
-    body.className = "cc-hints-body";
-    const steps = document.createElement("ol");
-    steps.className = "cc-hints-steps";
-    for (const step of guide.steps) {
-      const li = document.createElement("li");
-      li.append(...renderRich(step));
-      steps.append(li);
+    for (const pin of list) {
+      this.listEl.append(this.item(pin));
     }
-    body.append(steps);
-    this.hintsEl.append(body);
   }
 
   private item(pin: PinModel): HTMLElement {
     const row = document.createElement("div");
     row.className = "cc-drawer-item";
+
+    row.addEventListener("mouseenter", () => this.handlers.onHoverComment(pin.key));
+    row.addEventListener("mouseleave", () => this.handlers.onHoverComment(null));
 
     const meta = document.createElement("div");
     meta.className = "cc-drawer-meta";
@@ -151,15 +211,33 @@ export class Drawer {
     meta.append(dot, tag, target);
     row.append(meta);
 
+    if (pin.status === "resolved") {
+      const body = document.createElement("div");
+      body.className = "cc-drawer-text";
+      body.textContent = pin.text;
+      row.append(body);
+
+      const actions = document.createElement("div");
+      actions.className = "cc-drawer-actions";
+      const revert = document.createElement("button");
+      revert.type = "button";
+      revert.className = "cc-btn cc-btn--secondary";
+      revert.textContent = "Revert";
+      revert.addEventListener("click", () => this.handlers.onRevert(pin.key));
+      actions.append(revert);
+      row.append(actions);
+      return row;
+    }
+
     if (this.editing === pin.key && pin.removable) {
       const textarea = document.createElement("textarea");
       textarea.className = "cc-drawer-edit";
       textarea.value = pin.text;
       const actions = document.createElement("div");
-      actions.className = "cc-drawer-actions";
+      actions.className = "cc-drawer-actions cc-drawer-edit-actions";
       const save = document.createElement("button");
       save.type = "button";
-      save.className = "cc-save";
+      save.className = "cc-btn cc-btn--primary";
       save.textContent = "Save";
       save.addEventListener("click", () => {
         const value = textarea.value.trim();
@@ -169,12 +247,13 @@ export class Drawer {
       });
       const cancel = document.createElement("button");
       cancel.type = "button";
+      cancel.className = "cc-btn cc-btn--secondary-danger";
       cancel.textContent = "Cancel";
       cancel.addEventListener("click", () => {
         this.editing = null;
         this.render(this.pins);
       });
-      actions.append(save, cancel);
+      actions.append(cancel, save);
       row.append(textarea, actions);
       return row;
     }
@@ -189,6 +268,7 @@ export class Drawer {
       actions.className = "cc-drawer-actions";
       const edit = document.createElement("button");
       edit.type = "button";
+      edit.className = "cc-btn cc-btn--secondary";
       edit.textContent = "Edit";
       edit.addEventListener("click", () => {
         this.editing = pin.key;
@@ -196,7 +276,7 @@ export class Drawer {
       });
       const del = document.createElement("button");
       del.type = "button";
-      del.className = "cc-drawer-del";
+      del.className = "cc-btn cc-drawer-del";
       del.textContent = "Delete";
       del.addEventListener("click", () => this.handlers.onRemove(pin.key));
       actions.append(edit, del);
@@ -206,58 +286,31 @@ export class Drawer {
   }
 }
 
-interface Guide {
-  title: string;
-  steps: string[];
-}
+function scoreBar(label: string, value: number | null): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "cc-rank-row";
 
-function helpFor(ctx: DrawerContext): Guide {
-  if (ctx.mode === "remote") {
-    return {
-      title: "Working on a remote page",
-      steps: [
-        "Click any element to leave a comment, recolor it, or edit its text.",
-        "Add as many as you need; they stay saved in your browser.",
-        "Hit `⇩ Handoff` in the toolbar to export a Markdown file.",
-        "Share it with your developers or drop it into Claude Code.",
-      ],
-    };
-  }
-  if (!ctx.connected) {
-    return {
-      title: "Connect your editor",
-      steps: [
-        "Your comments are saved locally for this page.",
-        "Start Redline's server in your code editor.",
-        "Paste `/redline <id>` from the toolbar into Claude Code to start.",
-        "Claude implements each comment automatically.",
-      ],
-    };
-  }
-  return {
-    title: "How the flow works",
-    steps: [
-      "Click an element to comment, recolor, or edit its text.",
-      "Comments sync to your repo automatically.",
-      "Claude Code reads them and proposes changes.",
-      "Approve or reject right from the toolbar.",
-    ],
-  };
-}
+  const name = document.createElement("span");
+  name.className = "cc-rank-row-label";
+  name.textContent = label;
 
-function renderRich(text: string): Node[] {
-  const nodes: Node[] = [];
-  const parts = text.split(/(`[^`]+`)/);
-  for (const part of parts) {
-    if (part.startsWith("`") && part.endsWith("`")) {
-      const code = document.createElement("code");
-      code.textContent = part.slice(1, -1);
-      nodes.push(code);
-    } else if (part) {
-      nodes.push(document.createTextNode(part));
-    }
+  const bar = document.createElement("div");
+  bar.className = "cc-rank-bar";
+  const fill = document.createElement("div");
+  if (value === null) {
+    fill.className = "cc-rank-fill cc-rank-fill--indeterminate";
+  } else {
+    fill.className = "cc-rank-fill";
+    fill.style.width = `${value}%`;
   }
-  return nodes;
+  bar.append(fill);
+
+  const val = document.createElement("span");
+  val.className = "cc-rank-row-val";
+  val.textContent = value === null ? "" : String(value);
+
+  row.append(name, bar, val);
+  return row;
 }
 
 function kindLabel(pin: PinModel): string {

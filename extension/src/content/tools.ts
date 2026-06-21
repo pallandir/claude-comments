@@ -26,12 +26,13 @@ export function openColorPanel(
   actions.className = "cc-actions";
   const save = document.createElement("button");
   save.type = "button";
-  save.className = "cc-save";
+  save.className = "cc-btn cc-btn--primary";
   save.textContent = "Save";
   const close = document.createElement("button");
   close.type = "button";
+  close.className = "cc-btn cc-btn--secondary-danger";
   close.textContent = "Cancel";
-  actions.append(save, close);
+  actions.append(close, save);
   panel.append(actions);
 
   const teardown = () => panel.remove();

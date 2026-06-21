@@ -1,12 +1,12 @@
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { Broker } from "./broker.js";
 import type { CommentStore } from "./store.js";
-import { parseIncoming } from "./validate.js";
+import { parseIncoming, parseRatingRequest } from "./validate.js";
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const SERVICE = "redline";
 const WAIT_TIMEOUT_MS = 25_000;
-const BOUND_TTL_MS = 35_000;
+const BOUND_TTL_MS = 300_000;
 
 export interface IngestServer {
   port: number;
@@ -83,6 +83,7 @@ async function handle(
   }
 
   if (req.method === "GET" && req.url === "/health") {
+    const pendingRatings = (await store.listRatingRequests("pending")).length;
     json(res, 200, {
       ok: true,
       service: SERVICE,
@@ -96,6 +97,7 @@ async function handle(
       boundHeartbeatAt: broker.boundHeartbeat,
       watching: broker.isBoundAlive(BOUND_TTL_MS),
       notices: broker.pendingNotices,
+      pendingRatings,
     });
     return;
   }
@@ -169,6 +171,53 @@ async function handle(
       broker.bump();
       log(`ingested comment ${comment.id} on ${comment.metadata.page}`);
       json(res, 201, { id: comment.id, status: comment.status });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/comments/reopen") {
+    try {
+      const body = await readBody(req);
+      const parsed = JSON.parse(body) as { id?: string; note?: string };
+      if (!parsed.id || typeof parsed.id !== "string") {
+        json(res, 400, { error: "id required" });
+        return;
+      }
+      const comment = await store.reopenWithNote(parsed.id, parsed.note);
+      if (!comment) {
+        json(res, 404, { error: "not found" });
+        return;
+      }
+      broker.bump();
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && req.url?.startsWith("/ratings")) {
+    const url = query(req.url, "url") ?? undefined;
+    const ratings = await store.listRatingRequests();
+    const filtered = url ? ratings.filter((r) => r.url === url) : ratings;
+    json(res, 200, filtered);
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/ratings") {
+    try {
+      const body = await readBody(req);
+      const incoming = parseRatingRequest(body);
+      const entry = await store.addRatingRequest(incoming);
+      broker.bump();
+      try {
+        log(`rating request ${entry.id} for ${new URL(incoming.url).pathname}`);
+      } catch {
+        log(`rating request ${entry.id}`);
+      }
+      json(res, 201, { id: entry.id, status: entry.status });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }

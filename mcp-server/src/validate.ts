@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { IncomingComment } from "./types.js";
+import type { IncomingComment, IncomingRatingRequest } from "./types.js";
 
 const MAX_TEXT = 8_000;
 const MAX_SHORT = 2_000;
@@ -53,3 +53,25 @@ export const incomingCommentSchema = z
 export function parseIncoming(raw: string): IncomingComment {
   return incomingCommentSchema.parse(JSON.parse(raw)) as IncomingComment;
 }
+
+export const incomingRatingRequestSchema = z
+  .object({
+    url: z.string().max(MAX_URL),
+    screenshotDataUrl: screenshotSchema,
+    sessionId: z.string().max(MAX_SHORT).optional(),
+  })
+  .strict();
+
+export function parseRatingRequest(raw: string): IncomingRatingRequest {
+  return incomingRatingRequestSchema.parse(JSON.parse(raw)) as IncomingRatingRequest;
+}
+
+export const ratingResultSchema = z
+  .object({
+    score: z.number().int().min(0).max(100),
+    ui: z.number().int().min(0).max(100),
+    ux: z.number().int().min(0).max(100),
+    coherence: z.number().int().min(0).max(100),
+    notes: z.string().max(MAX_TEXT),
+  })
+  .strict();

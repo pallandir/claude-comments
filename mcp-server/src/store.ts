@@ -6,26 +6,33 @@ import type {
   CommentStatus,
   DeferredComment,
   IncomingComment,
+  IncomingRatingRequest,
   Operation,
   OperationType,
+  RatingRequest,
+  RatingResult,
+  RatingStatus,
 } from "./types.js";
 
 const STORE_DIR = ".claude";
 const STORE_FILE = join(STORE_DIR, "design-comments.md");
 const SHOTS_DIR = join(STORE_DIR, "design-shots");
 const DEFERRED_FILE = join(STORE_DIR, "redline-deferred.md");
+const RATINGS_FILE = join(STORE_DIR, "redline-ratings.json");
 
 export class CommentStore {
   private readonly storeRoot: string;
   private readonly storePath: string;
   private readonly shotsPath: string;
   private readonly deferredPath: string;
+  private readonly ratingsPath: string;
 
   constructor(root: string) {
     this.storeRoot = root;
     this.storePath = join(root, STORE_FILE);
     this.shotsPath = join(root, SHOTS_DIR);
     this.deferredPath = join(root, DEFERRED_FILE);
+    this.ratingsPath = join(root, RATINGS_FILE);
   }
 
   get root(): string {
@@ -76,6 +83,16 @@ export class CommentStore {
     return comment;
   }
 
+  async reopenWithNote(id: string, note?: string): Promise<Comment | undefined> {
+    const comments = await this.read();
+    const comment = comments.find((c) => c.id === id);
+    if (!comment) return undefined;
+    comment.status = "open";
+    if (note) comment.comment = `${comment.comment}\n\n${note}`;
+    await this.write(comments);
+    return comment;
+  }
+
   async clearResolved(): Promise<number> {
     const comments = await this.read();
     const kept = comments.filter((c) => c.status === "open");
@@ -117,6 +134,65 @@ export class CommentStore {
     existing.push(entry);
     await writeFileAtomic(this.deferredPath, serializeDeferred(existing));
     return entry;
+  }
+
+  async addRatingRequest(incoming: IncomingRatingRequest): Promise<RatingRequest> {
+    const ratings = await this.readRatings();
+    const id = `r${ratings.length + 1}-${randomUUID().slice(0, 6)}`;
+    const screenshot = incoming.screenshotDataUrl
+      ? await this.saveShot(id, incoming.screenshotDataUrl)
+      : null;
+    const entry: RatingRequest = {
+      id,
+      createdAt: new Date().toISOString(),
+      url: incoming.url,
+      screenshot,
+      sessionId: incoming.sessionId,
+      status: "pending",
+    };
+    ratings.push(entry);
+    await this.writeRatings(ratings);
+    return entry;
+  }
+
+  async listRatingRequests(status?: RatingStatus): Promise<RatingRequest[]> {
+    const all = await this.readRatings();
+    return status ? all.filter((r) => r.status === status) : all;
+  }
+
+  async getRatingRequest(id: string): Promise<RatingRequest | undefined> {
+    return (await this.readRatings()).find((r) => r.id === id);
+  }
+
+  async setRatingScore(id: string, result: RatingResult): Promise<RatingRequest | undefined> {
+    const ratings = await this.readRatings();
+    const entry = ratings.find((r) => r.id === id);
+    if (!entry) return undefined;
+    entry.status = "scored";
+    entry.result = result;
+    await this.writeRatings(ratings);
+    return entry;
+  }
+
+  async latestScoredRatingForUrl(url: string): Promise<RatingRequest | undefined> {
+    const all = await this.readRatings();
+    return all
+      .filter((r) => r.url === url && r.status === "scored")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  }
+
+  private async readRatings(): Promise<RatingRequest[]> {
+    const raw = await readTextFile(this.ratingsPath);
+    if (!raw) return [];
+    try {
+      return JSON.parse(raw) as RatingRequest[];
+    } catch {
+      return [];
+    }
+  }
+
+  private async writeRatings(ratings: RatingRequest[]): Promise<void> {
+    await writeFileAtomic(this.ratingsPath, JSON.stringify(ratings, null, 2));
   }
 
   private async saveShot(id: string, dataUrl: string): Promise<string> {

@@ -1,6 +1,6 @@
 import { captureElement } from "../lib/fingerprint.js";
 import { resolveSource } from "../lib/source-map.js";
-import type { Message, PinModel, QueueStatus, Response } from "../messages.js";
+import type { Message, PageRating, PinModel, QueueStatus, Response } from "../messages.js";
 import type { DraftRequest, Operation, Rect } from "../types.js";
 import { Drawer, type DrawerContext } from "./drawer.js";
 import { downloadHandoff } from "./handoff.js";
@@ -34,11 +34,13 @@ function pageMode(): Mode {
 
 function init(): void {
   let active = false;
+  let picking = true;
   let interacting = false;
   let drawerOpen = false;
-  let wasConnected = false;
   let lastPins: PinModel[] = [];
   let lastStatus: QueueStatus | null = null;
+  let lastRating: PageRating | null = null;
+  let lastWatching = false;
   let pollTimer: number | null = null;
   const mode = pageMode();
 
@@ -62,16 +64,21 @@ function init(): void {
     if (on === active) return;
     active = on;
     if (on) {
+      picking = true;
       toolbar = new Toolbar(surface, {
         onComments: toggleDrawer,
+        onSend: () => void handleSend(),
         onHandoff: handleHandoff,
         onReset: handleReset,
         onDismissNotice: (id) => void handleDismissNotice(id),
+        onTogglePick: () => setPicking(!picking),
       });
       drawer = new Drawer(surface, {
         onEdit: (cid, text) => void editComment(cid, text),
         onRemove: (key) => void removePin(key),
         onClose: toggleDrawer,
+        onRevert: (key) => void handleRevert(key),
+        onHoverComment: (key) => surface.focusPin(key),
       });
       void refresh();
       startPolling();
@@ -85,18 +92,31 @@ function init(): void {
       drawer?.destroy();
       toolbar = null;
       drawer = null;
+      picking = true;
       interacting = false;
       drawerOpen = false;
-      wasConnected = false;
       surface.unmount();
     }
     updateCursor();
   }
 
+  function setPicking(on: boolean): void {
+    if (on === picking) return;
+    picking = on;
+    if (!on) {
+      surface.highlightHover(null);
+      surface.setSelection(null);
+      surface.closeActionMenu();
+      interacting = false;
+    }
+    updateCursor();
+    render();
+  }
+
   document.addEventListener(
     "mousemove",
     (event) => {
-      if (!active || interacting) return;
+      if (!active || !picking || interacting) return;
       if (surface.ownsEvent(event)) {
         surface.highlightHover(null);
         return;
@@ -109,7 +129,7 @@ function init(): void {
   document.addEventListener(
     "click",
     (event) => {
-      if (!active || interacting || surface.ownsEvent(event)) return;
+      if (!active || !picking || interacting || surface.ownsEvent(event)) return;
       event.preventDefault();
       event.stopPropagation();
       surface.highlightHover(null);
@@ -121,7 +141,7 @@ function init(): void {
   document.addEventListener(
     "keydown",
     (event) => {
-      if (active && !interacting && event.key === "Escape") surface.setSelection(null);
+      if (active && picking && !interacting && event.key === "Escape") surface.setSelection(null);
     },
     true,
   );
@@ -155,12 +175,13 @@ function init(): void {
     if (which === "comment") {
       surface.showComposer(
         el,
-        async (commentText, planFirst) => {
+        async (commentText, { planFirst, attachScreenshot }) => {
           done();
           await record(el, {
             comment: commentText,
             operation: { type: "comment", property: null, from: null, to: null },
             planFirst,
+            attachScreenshot,
           });
         },
         done,
@@ -171,7 +192,7 @@ function init(): void {
         el as HTMLElement,
         (operation, summary) => {
           done();
-          void record(el, { comment: summary, operation });
+          void record(el, { comment: summary, operation, attachScreenshot: true });
         },
         done,
       );
@@ -185,6 +206,7 @@ function init(): void {
           void record(el, {
             comment,
             operation: { type: "text", property: null, from, to },
+            attachScreenshot: true,
           });
         },
         done,
@@ -210,6 +232,7 @@ function init(): void {
     comment: string;
     operation: Operation;
     planFirst?: boolean;
+    attachScreenshot?: boolean;
   }
 
   async function record(el: Element, payload: RecordPayload): Promise<void> {
@@ -217,10 +240,14 @@ function init(): void {
 
     const r = el.getBoundingClientRect();
     const rect: Rect = { x: r.x, y: r.y, w: r.width, h: r.height };
-    surface.setHidden(true);
-    await nextPaint();
-    const screenshot = await captureRegion(rect);
-    surface.setHidden(false);
+
+    let screenshot: string | null = null;
+    if (payload.attachScreenshot !== false) {
+      surface.setHidden(true);
+      await nextPaint();
+      screenshot = await captureRegion(rect);
+      surface.setHidden(false);
+    }
 
     const draft: DraftRequest = {
       comment: payload.comment,
@@ -243,6 +270,18 @@ function init(): void {
   async function captureRegion(rect: Rect): Promise<string | null> {
     const res = await send({ type: "capture-region", rect, dpr: window.devicePixelRatio });
     return res.ok && res.dataUrl ? res.dataUrl : null;
+  }
+
+  async function publishPageRating(): Promise<void> {
+    const rect: Rect = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+    surface.setHidden(true);
+    await nextPaint();
+    const screenshot = await captureRegion(rect);
+    surface.setHidden(false);
+    await send({ type: "request-rating", url: location.href, screenshotDataUrl: screenshot });
+    lastRating = { id: "pending", status: "pending" };
+    drawer?.setRating(lastRating);
+    await refresh();
   }
 
   async function handleDismissNotice(commentId: string): Promise<void> {
@@ -269,6 +308,11 @@ function init(): void {
     await refresh();
   }
 
+  async function handleSend(): Promise<void> {
+    await send({ type: "flush" });
+    await refresh();
+  }
+
   async function handleHandoff(): Promise<void> {
     const res = await send({ type: "get-comments", url: location.href });
     if (res.ok && res.comments && res.comments.length > 0) downloadHandoff(res.comments);
@@ -280,39 +324,27 @@ function init(): void {
   }
 
   async function handleReset(): Promise<void> {
-    const pageCount = lastPins.length;
-    const totalRes = await send({ type: "count-all" });
-    const total = totalRes.ok && typeof totalRes.count === "number" ? totalRes.count : pageCount;
+    const total = lastPins.length;
     if (total === 0) return;
 
     interacting = true;
     updateCursor();
     surface.showModal({
-      title: "Delete comments?",
-      body: "This permanently removes the selected comments and their saved screenshots from this repo. This cannot be undone.",
+      title: "Delete all comments?",
+      body: "This permanently removes all comments and their screenshots from every page. This cannot be undone.",
       actions: [
+        { label: "Cancel", variant: "ghost", onClick: () => {} },
         {
-          label: `This page (${pageCount})`,
-          variant: "danger",
-          onClick: () => void clearPage(),
-        },
-        {
-          label: `Everything, all pages (${total})`,
+          label: "Delete all comments",
           variant: "danger",
           onClick: () => void clearEverything(),
         },
-        { label: "Cancel", variant: "ghost", onClick: () => {} },
       ],
       onDismiss: () => {
         interacting = false;
         updateCursor();
       },
     });
-  }
-
-  async function clearPage(): Promise<void> {
-    await send({ type: "clear-comments", url: location.href });
-    await refresh();
   }
 
   async function clearEverything(): Promise<void> {
@@ -327,39 +359,55 @@ function init(): void {
     ]);
     lastPins = pinsRes.ok && pinsRes.pins ? pinsRes.pins : [];
     lastStatus = statusRes.ok ? (statusRes.status ?? null) : null;
-    await maybeRotateSession();
+    const newRating = statusRes.ok ? (statusRes.status?.rating ?? null) : null;
+    if (newRating !== null) {
+      lastRating = newRating;
+      drawer?.setRating(lastRating);
+    }
+    const nowWatching = Boolean(lastStatus?.watching);
+    if (nowWatching && !lastWatching && !lastRating) void publishPageRating();
+    lastWatching = nowWatching;
     surface.setPins(lastPins, (key) => void removePin(key));
     render();
   }
 
-  async function maybeRotateSession(): Promise<void> {
-    const connected = Boolean(lastStatus?.serverReachable) && Boolean(lastStatus?.watching);
-    if (wasConnected && !connected) {
-      await send({ type: "reset-session" });
-      const res = await send({ type: "queue-status" });
-      if (res.ok) lastStatus = res.status ?? lastStatus;
-    }
-    wasConnected = connected;
-  }
-
   async function removePin(cid: string): Promise<void> {
+    const pin = lastPins.find((p) => p.key === cid);
+    if (pin && (pin.kind === "style" || pin.kind === "text") && pin.operation?.from != null) {
+      const el = resolveXPath(pin.operator);
+      if (el instanceof HTMLElement) {
+        if (pin.kind === "style" && pin.operation.property) {
+          el.style.setProperty(pin.operation.property, pin.operation.from);
+        } else if (pin.kind === "text") {
+          el.textContent = pin.operation.from;
+        }
+      }
+    }
     await send({ type: "remove-comment", cid });
     await refresh();
   }
 
+  async function handleRevert(key: string): Promise<void> {
+    const note = "Revert the previous change you made for this comment.";
+    await send({ type: "reopen-comment", id: key, note });
+    await refresh();
+  }
+
   function render(): void {
+    const activeCount = lastPins.filter((p) => p.status !== "resolved").length;
     toolbar?.render({
       mode,
-      count: lastPins.length,
+      count: activeCount,
       status: lastStatus,
       drawerOpen,
       sessionId: lastStatus?.sessionId ?? null,
+      picking,
     });
     drawer?.render(lastPins, drawerCtx());
   }
 
   function updateCursor(): void {
-    document.documentElement.style.cursor = active && !interacting ? "crosshair" : "";
+    document.documentElement.style.cursor = active && picking && !interacting ? "crosshair" : "";
   }
 
   function nextPaint(): Promise<void> {
@@ -378,10 +426,31 @@ function statusChanged(a: QueueStatus | null, b: QueueStatus | null): boolean {
     a.queued !== b.queued ||
     a.watching !== b.watching ||
     a.root !== b.root ||
-    noticesKey(a.notices) !== noticesKey(b.notices)
+    a.version !== b.version ||
+    noticesKey(a.notices) !== noticesKey(b.notices) ||
+    ratingKey(a.rating) !== ratingKey(b.rating)
   );
+}
+
+function ratingKey(r: QueueStatus["rating"]): string {
+  return `${r?.id ?? ""}:${r?.status ?? ""}:${r?.result?.score ?? ""}`;
 }
 
 function noticesKey(notices: QueueStatus["notices"]): string {
   return notices?.map((n) => n.commentId).join(",") ?? "";
+}
+
+function resolveXPath(xpath: string): Element | null {
+  try {
+    const result = document.evaluate(
+      xpath,
+      document,
+      null,
+      XPathResult.FIRST_ORDERED_NODE_TYPE,
+      null,
+    );
+    return result.singleNodeValue as Element | null;
+  } catch {
+    return null;
+  }
 }

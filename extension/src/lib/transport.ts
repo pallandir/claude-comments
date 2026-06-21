@@ -1,4 +1,4 @@
-import type { DeferralNotice, PinStatus, QueueStatus } from "../messages.js";
+import type { DeferralNotice, PageRating, PinStatus, QueueStatus } from "../messages.js";
 import type {
   CommentMetadata,
   DraftRequest,
@@ -45,6 +45,7 @@ interface ServerInfo {
   expectedSession: string | null;
   watching: boolean;
   notices: DeferralNotice[];
+  version: number | null;
 }
 
 // A page is "local" when it is served from this machine. Only then may the
@@ -89,12 +90,6 @@ export async function getSessionId(): Promise<string> {
   const stored = await chrome.storage.local.get(SESSION_KEY);
   const existing = stored[SESSION_KEY] as string | undefined;
   if (existing) return existing;
-  const id = crypto.randomUUID().slice(0, 8);
-  await chrome.storage.local.set({ [SESSION_KEY]: id });
-  return id;
-}
-
-export async function resetSessionId(): Promise<string> {
   const id = crypto.randomUUID().slice(0, 8);
   await chrome.storage.local.set({ [SESSION_KEY]: id });
   return id;
@@ -182,6 +177,7 @@ async function probe(port: number): Promise<ServerInfo | null> {
       expectedSession: body.expectedSession ?? null,
       watching: body.watching ?? false,
       notices: body.notices ?? [],
+      version: body.version ?? null,
     };
   } catch {
     return null;
@@ -234,7 +230,15 @@ export async function dismissNotice(commentId: string): Promise<void> {
 async function statusFrom(server: ServerInfo | null): Promise<QueueStatus> {
   const queued = (await getQueue()).length;
   if (!server) {
-    return { queued, serverReachable: false, port: null, root: null, watching: false, notices: [] };
+    return {
+      queued,
+      serverReachable: false,
+      port: null,
+      root: null,
+      watching: false,
+      notices: [],
+      version: null,
+    };
   }
   return {
     queued,
@@ -243,6 +247,7 @@ async function statusFrom(server: ServerInfo | null): Promise<QueueStatus> {
     root: server.root,
     watching: server.watching,
     notices: server.notices,
+    version: server.version,
   };
 }
 
@@ -282,4 +287,49 @@ export async function status(): Promise<QueueStatus> {
     return statusFrom(fresh);
   }
   return statusFrom(null);
+}
+
+export async function reopenComment(id: string, note?: string): Promise<void> {
+  const server = await findServer();
+  if (!server) return;
+  try {
+    await postJson(server.port, "/comments/reopen", { id, note });
+  } catch {
+    // best-effort
+  }
+}
+
+export async function requestRating(url: string, screenshotDataUrl: string | null): Promise<void> {
+  const server = await findServer();
+  if (!server) return;
+  const sessionId = await getSessionId();
+  try {
+    await postJson(server.port, "/ratings", { url, screenshotDataUrl, sessionId });
+  } catch {
+    // best-effort; missing rating is non-fatal
+  }
+}
+
+export async function fetchRating(url: string): Promise<PageRating | null> {
+  const server = await findServer();
+  if (!server) return null;
+  try {
+    const res = await fetch(api(server.port, `/ratings?url=${encodeURIComponent(url)}`));
+    if (!res.ok) return null;
+    const ratings = (await res.json()) as Array<{
+      id: string;
+      status: "pending" | "scored";
+      url: string;
+      createdAt: string;
+      result?: PageRating["result"];
+    }>;
+    const forUrl = ratings
+      .filter((r) => r.url === url)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (!forUrl.length) return null;
+    const latest = forUrl[0];
+    return { id: latest.id, status: latest.status, result: latest.result };
+  } catch {
+    return null;
+  }
 }

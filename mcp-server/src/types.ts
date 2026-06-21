@@ -65,3 +65,29 @@ export interface IncomingComment {
   sessionId?: string;
   planFirst?: boolean;
 }
+
+export type RatingStatus = "pending" | "scored";
+
+export interface RatingResult {
+  score: number;
+  ui: number;
+  ux: number;
+  coherence: number;
+  notes: string;
+}
+
+export interface IncomingRatingRequest {
+  url: string;
+  screenshotDataUrl?: string | null;
+  sessionId?: string;
+}
+
+export interface RatingRequest {
+  id: string;
+  createdAt: string;
+  url: string;
+  screenshot: string | null;
+  sessionId?: string;
+  status: RatingStatus;
+  result?: RatingResult;
+}

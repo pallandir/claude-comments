@@ -43,6 +43,9 @@ export class Broker {
 
   markPolled(): void {
     this.lastPolled = new Date().toISOString();
+    if (this.boundSessionId) {
+      this.boundHeartbeatAt = new Date().toISOString();
+    }
   }
 
   bump(): void {
@@ -81,12 +84,6 @@ export class Broker {
     this.boundHeartbeatAt = new Date().toISOString();
     this.bump();
     return { ok: true };
-  }
-
-  heartbeatSession(): void {
-    if (this.boundSessionId) {
-      this.boundHeartbeatAt = new Date().toISOString();
-    }
   }
 
   unbindSession(): void {

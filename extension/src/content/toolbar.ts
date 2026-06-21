@@ -1,4 +1,13 @@
 import type { DeferralNotice, QueueStatus } from "../messages.js";
+import {
+  ICON_COMMENT,
+  ICON_GRIP,
+  ICON_HANDOFF,
+  ICON_SEND,
+  ICON_TARGET,
+  ICON_TRASH,
+  icon,
+} from "./icons.js";
 import type { Surface } from "./surface.js";
 
 export type ToolId = "select" | "comment" | "color" | "text";
@@ -8,9 +17,11 @@ const POS_KEY = "cc-toolbar-pos";
 
 export interface ToolbarHandlers {
   onComments: () => void;
+  onSend: () => void;
   onHandoff: () => void;
   onReset: () => void;
   onDismissNotice: (commentId: string) => void;
+  onTogglePick: () => void;
 }
 
 export interface ToolbarState {
@@ -19,13 +30,17 @@ export interface ToolbarState {
   status: QueueStatus | null;
   drawerOpen: boolean;
   sessionId: string | null;
+  picking: boolean;
 }
 
 export class Toolbar {
   private readonly root: HTMLElement;
   private readonly panel: HTMLElement;
   private readonly commentsBtn: HTMLButtonElement;
+  private readonly commentsLabel: Text;
+  private readonly sendBtn: HTMLButtonElement;
   private readonly handoffBtn: HTMLButtonElement;
+  private readonly targetBtn: HTMLButtonElement;
   private readonly handlers: ToolbarHandlers;
   private panelKey = "";
 
@@ -40,15 +55,31 @@ export class Toolbar {
 
     const grip = document.createElement("div");
     grip.className = "cc-grip cc-has-tip";
-    grip.textContent = "⠿";
+    grip.append(icon(ICON_GRIP, "cc-action-glyph"));
     grip.dataset.tip = "Drag to move";
     this.makeDraggable(grip);
 
-    this.commentsBtn = action("💬 Comments", "Open the comments panel", () =>
-      handlers.onComments(),
-    );
+    this.targetBtn = document.createElement("button");
+    this.targetBtn.type = "button";
+    this.targetBtn.className = "cc-action cc-action--icon cc-action--active cc-has-tip";
+    this.targetBtn.dataset.tip = "Pause element picking";
+    this.targetBtn.append(icon(ICON_TARGET, "cc-action-glyph"));
+    this.targetBtn.addEventListener("click", () => handlers.onTogglePick());
 
-    this.handoffBtn = action("⇩ Handoff", "Download a Markdown handoff", () =>
+    this.commentsLabel = document.createTextNode("Comments");
+    this.commentsBtn = document.createElement("button");
+    this.commentsBtn.type = "button";
+    this.commentsBtn.className = "cc-action cc-has-tip";
+    this.commentsBtn.dataset.tip = "Open the comments panel";
+    this.commentsBtn.append(icon(ICON_COMMENT, "cc-action-glyph"), this.commentsLabel);
+    this.commentsBtn.addEventListener("click", () => handlers.onComments());
+
+    this.sendBtn = action(ICON_SEND, "Send to AI", "Send all comments to your AI assistant", () =>
+      handlers.onSend(),
+    );
+    this.sendBtn.classList.add("cc-action--primary");
+
+    this.handoffBtn = action(ICON_HANDOFF, "Handoff", "Download a Markdown handoff", () =>
       handlers.onHandoff(),
     );
 
@@ -59,7 +90,17 @@ export class Toolbar {
     resetBtn.append(icon(ICON_TRASH, "cc-action-glyph"));
     resetBtn.addEventListener("click", () => handlers.onReset());
 
-    this.root.append(this.panel, grip, this.commentsBtn, sep(), this.handoffBtn, resetBtn);
+    this.root.append(
+      this.panel,
+      grip,
+      this.targetBtn,
+      sep(),
+      this.commentsBtn,
+      sep(),
+      this.sendBtn,
+      this.handoffBtn,
+      resetBtn,
+    );
     surface.append(this.root);
     void this.restorePosition();
   }
@@ -69,18 +110,25 @@ export class Toolbar {
   }
 
   render(state: ToolbarState): void {
+    this.targetBtn.classList.toggle("cc-action--active", state.picking);
+    this.targetBtn.dataset.tip = state.picking ? "Pause element picking" : "Resume element picking";
+
     this.commentsBtn.classList.toggle("cc-action--active", state.drawerOpen);
-    this.commentsBtn.textContent = `💬 Comments (${state.count})`;
+    this.commentsLabel.textContent = `Comments (${state.count})`;
 
     if (state.mode === "remote") {
+      this.sendBtn.hidden = true;
       this.handoffBtn.classList.add("cc-action--primary");
       this.setPanel("remote", () => remotePanel());
       return;
     }
 
+    this.sendBtn.hidden = false;
+
     const status = state.status;
     const reachable = Boolean(status?.serverReachable);
     const watching = Boolean(status?.watching);
+    this.sendBtn.disabled = !reachable || (status?.queued ?? 0) === 0;
 
     this.handoffBtn.classList.toggle("cc-action--primary", !reachable);
 
@@ -202,40 +250,17 @@ export class Toolbar {
   }
 }
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-
-const ICON_TRASH = [
-  "M10 11v6",
-  "M14 11v6",
-  "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6",
-  "M3 6h18",
-  "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
-];
-
-function icon(paths: string[], className: string): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "2");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("class", className);
-  for (const d of paths) {
-    const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute("d", d);
-    svg.append(path);
-  }
-  return svg;
-}
-
-function action(label: string, tip: string, onClick: () => void): HTMLButtonElement {
+function action(
+  iconNode: string,
+  label: string,
+  tip: string,
+  onClick: () => void,
+): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "cc-action cc-has-tip";
   btn.dataset.tip = tip;
-  btn.textContent = label;
+  btn.append(icon(iconNode, "cc-action-glyph"), label);
   btn.addEventListener("click", onClick);
   return btn;
 }
@@ -266,7 +291,11 @@ function setupPanel(
       : "Waiting for Claude…"
     : "Start Redline in your editor.";
 
-  wrap.append(watchRow(sessionId), setupRow(watching, "Project connected", projectHint));
+  const tip = document.createElement("div");
+  tip.className = "cc-setup-hint";
+  tip.textContent =
+    "Tip: start Claude in auto-accept mode (Shift+Tab at the prompt) so comments are applied without approval pauses.";
+  wrap.append(watchRow(sessionId), setupRow(watching, "Project connected", projectHint), tip);
   return wrap;
 }
 

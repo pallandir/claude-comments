@@ -7,29 +7,25 @@ import {
   countAll,
   dismissNotice,
   enqueue,
+  fetchRating,
   fetchServerComments,
   flush,
   getSessionId,
   isLocalUrl,
   listForUrl,
   remove,
-  resetSessionId,
+  reopenComment,
+  requestRating,
   status,
   update,
 } from "./lib/transport.js";
 import type { Message, PinModel, QueueStatus, Response } from "./messages.js";
 import type { SourceLocation } from "./types.js";
 
-const FLUSH_ALARM = "redline-flush";
 const ACTIVE_KEY = "cc-active";
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: 1 });
   void chrome.action.setBadgeBackgroundColor({ color: "#d97757" });
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === FLUSH_ALARM) void flush();
 });
 
 chrome.action.onClicked.addListener(async (tab) => {
@@ -89,7 +85,7 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     }
     case "save-request": {
       const item = await enqueue(message.draft);
-      const result = isLocalUrl(message.draft.url) ? await flush() : offlineStatus();
+      const result = isLocalUrl(message.draft.url) ? await status() : offlineStatus();
       return { ok: true, status: result, cid: item.cid };
     }
     case "page-comments":
@@ -124,11 +120,19 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
       const local = isLocalUrl(sender.tab?.url ?? "");
       if (!local) return { ok: true, status: offlineStatus() };
       const st = await status();
-      return { ok: true, status: { ...st, sessionId: await getSessionId() } };
+      const rating = sender.tab?.url ? await fetchRating(sender.tab.url) : null;
+      return { ok: true, status: { ...st, sessionId: await getSessionId(), rating } };
     }
-    case "reset-session":
-      await resetSessionId();
+    case "request-rating": {
+      if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true };
+      await requestRating(message.url, message.screenshotDataUrl);
       return { ok: true };
+    }
+    case "reopen-comment": {
+      if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true };
+      await reopenComment(message.id, message.note);
+      return { ok: true };
+    }
     default:
       return { ok: false, error: `unhandled message: ${(message as Message).type}` };
   }
@@ -175,6 +179,7 @@ async function pagePins(url: string): Promise<PinModel[]> {
         removable: true,
         route: routeOf(q.url),
         target: targetLabel(q.operator, q.source, q.metadata.elementText),
+        operation: { property: q.operation.property, from: q.operation.from, to: q.operation.to },
       }),
     ),
     ...synced.map(
@@ -182,11 +187,12 @@ async function pagePins(url: string): Promise<PinModel[]> {
         key: s.id,
         operator: s.operator,
         text: s.comment,
-        status: s.status,
+        status: s.status === "open" ? "processing" : s.status,
         kind: s.operation.type,
         removable: false,
         route: s.metadata.page,
         target: targetLabel(s.operator, s.source ?? null, s.metadata.elementText),
+        operation: { property: s.operation.property, from: s.operation.from, to: s.operation.to },
       }),
     ),
   ];

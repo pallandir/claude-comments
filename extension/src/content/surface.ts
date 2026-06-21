@@ -1,4 +1,5 @@
 import type { PinModel } from "../messages.js";
+import { ICON_COLOR, ICON_COMMENT, ICON_TEXT, ICON_WARNING, icon } from "./icons.js";
 import overlayCss from "./overlay.css?inline";
 
 interface ActivePin {
@@ -121,18 +122,30 @@ export class Surface {
     const menu = document.createElement("div");
     menu.className = "cc-actions-menu";
     menu.append(
-      menuButton("💬", "Comment", handlers.onComment),
-      menuButton("◑", "Color", handlers.onColor),
-      menuButton("T", "Text", handlers.onText),
+      menuButton(icon(ICON_COMMENT, "cc-menu-icon"), "Comment", handlers.onComment),
+      menuButton(icon(ICON_COLOR, "cc-menu-icon"), "Color", handlers.onColor),
+      menuButton(icon(ICON_TEXT, "cc-menu-icon"), "Text", handlers.onText),
     );
     this.actionMenu = menu;
     this.shadow.append(menu);
 
     const rect = target.getBoundingClientRect();
-    const above = rect.top + window.scrollY - menu.offsetHeight - 10;
+    const menuW = menu.offsetWidth || 188;
+    const menuH = menu.offsetHeight || 60;
+    const above = rect.top + window.scrollY - menuH - 10;
     const below = rect.bottom + window.scrollY + 10;
-    menu.style.top = `${above > window.scrollY ? above : below}px`;
-    menu.style.left = `${Math.max(8, rect.left + window.scrollX)}px`;
+    const preferAbove = above > window.scrollY + 8;
+    const topRaw = preferAbove ? above : below;
+    const clampedTop = Math.min(
+      Math.max(window.scrollY + 8, topRaw),
+      window.scrollY + window.innerHeight - menuH - 8,
+    );
+    const clampedLeft = Math.min(
+      Math.max(8 + window.scrollX, rect.left + window.scrollX),
+      window.scrollX + window.innerWidth - menuW - 8,
+    );
+    menu.style.top = `${clampedTop}px`;
+    menu.style.left = `${clampedLeft}px`;
 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -171,9 +184,9 @@ export class Surface {
     const card = document.createElement("div");
     card.className = "cc-modal";
 
-    const icon = document.createElement("div");
-    icon.className = "cc-modal-icon";
-    icon.textContent = "⚠";
+    const warnEl = document.createElement("div");
+    warnEl.className = "cc-modal-icon";
+    warnEl.append(icon(ICON_WARNING, "cc-modal-warning-icon"));
     const title = document.createElement("div");
     title.className = "cc-modal-title";
     title.textContent = options.title;
@@ -209,48 +222,89 @@ export class Surface {
     });
     document.addEventListener("keydown", onKey, true);
 
-    card.append(icon, title, body, actions);
+    card.append(warnEl, title, body, actions);
     backdrop.append(card);
     this.shadow.append(backdrop);
   }
 
   showComposer(
     target: Element,
-    onSubmit: (text: string, planFirst: boolean) => Promise<void> | void,
+    onSubmit: (
+      text: string,
+      options: { planFirst: boolean; attachScreenshot: boolean },
+    ) => Promise<void> | void,
     onCancel?: () => void,
   ): void {
     this.mount();
     this.closeComposer();
     this.composerAnchor = target;
 
+    let planFirst = false;
+    let attachScreenshot = false;
+
     const highlight = document.createElement("div");
     highlight.className = "cc-highlight";
 
     const panel = document.createElement("div");
     panel.className = "cc-panel";
+
+    const head = document.createElement("div");
+    head.className = "cc-panel-head";
+    head.textContent = "Add comment";
+
     const textarea = document.createElement("textarea");
     textarea.placeholder = "What should Claude change here?";
+
+    const toggleRow = document.createElement("div");
+    toggleRow.className = "cc-toggle-row";
+
+    const screenshotBtn = document.createElement("button");
+    screenshotBtn.type = "button";
+    screenshotBtn.className = "cc-toggle";
+    screenshotBtn.setAttribute("role", "switch");
+    screenshotBtn.setAttribute("aria-pressed", "false");
+    const screenshotLabel = document.createElement("span");
+    screenshotLabel.className = "cc-toggle-label";
+    screenshotLabel.textContent = "Attach screenshot";
+    const screenshotTrack = document.createElement("span");
+    screenshotTrack.className = "cc-switch";
+    screenshotBtn.append(screenshotLabel, screenshotTrack);
+    screenshotBtn.addEventListener("click", () => {
+      attachScreenshot = !attachScreenshot;
+      screenshotBtn.setAttribute("aria-pressed", String(attachScreenshot));
+    });
+
+    const planBtn = document.createElement("button");
+    planBtn.type = "button";
+    planBtn.className = "cc-toggle";
+    planBtn.setAttribute("role", "switch");
+    planBtn.setAttribute("aria-pressed", "false");
+    const planLabel = document.createElement("span");
+    planLabel.className = "cc-toggle-label";
+    planLabel.textContent = "Plan as a separate task";
+    const planTrack = document.createElement("span");
+    planTrack.className = "cc-switch";
+    planBtn.append(planLabel, planTrack);
+    planBtn.addEventListener("click", () => {
+      planFirst = !planFirst;
+      planBtn.setAttribute("aria-pressed", String(planFirst));
+    });
+
+    toggleRow.append(screenshotBtn, planBtn);
+
     const hint = document.createElement("div");
     hint.className = "cc-hint";
-    hint.textContent = "⌘↵ to save · Esc to cancel";
-
-    const planToggle = document.createElement("label");
-    planToggle.className = "cc-plan-toggle";
-    const planCheckbox = document.createElement("input");
-    planCheckbox.type = "checkbox";
-    planCheckbox.className = "cc-plan-checkbox";
-    const planLabel = document.createElement("span");
-    planLabel.textContent = "Plan this first";
-    planToggle.append(planCheckbox, planLabel);
+    hint.textContent = "Shift+Enter for new line";
 
     const actions = document.createElement("div");
     actions.className = "cc-actions";
     const save = document.createElement("button");
     save.type = "button";
-    save.className = "cc-save";
+    save.className = "cc-btn cc-btn--primary";
     save.textContent = "Save";
     const cancel = document.createElement("button");
     cancel.type = "button";
+    cancel.className = "cc-btn cc-btn--secondary-danger";
     cancel.textContent = "Cancel";
 
     const dismiss = () => {
@@ -261,7 +315,7 @@ export class Surface {
       const value = textarea.value.trim();
       if (!value) return dismiss();
       this.closeComposer();
-      await onSubmit(value, planCheckbox.checked);
+      await onSubmit(value, { planFirst, attachScreenshot });
     };
 
     cancel.addEventListener("click", dismiss);
@@ -270,14 +324,14 @@ export class Surface {
       if (event.key === "Escape") {
         event.preventDefault();
         dismiss();
-      } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      } else if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
         void submit();
       }
     });
 
-    actions.append(save, cancel);
-    panel.append(textarea, planToggle, hint, actions);
+    actions.append(hint, cancel, save);
+    panel.append(head, textarea, toggleRow, actions);
     this.composerHighlight = highlight;
     this.composer = panel;
     this.shadow.append(highlight, panel);
@@ -292,11 +346,15 @@ export class Surface {
 
     this.pins = models.map((model) => {
       const wrap = document.createElement("div");
-      wrap.className = `cc-pin-wrap cc-pin-wrap--${model.status}`;
+      wrap.dataset.key = model.key;
+      const classes = ["cc-pin-wrap", `cc-pin-wrap--${model.status}`];
+      if (model.status === "resolved") classes.push("cc-pin-wrap--hidden");
+      wrap.className = classes.join(" ");
       const marker = document.createElement("div");
       marker.className = "cc-pin";
       const glyphEl = document.createElement("span");
-      glyphEl.textContent = glyph(model.kind);
+      const g = glyph(model.kind);
+      if (g) glyphEl.append(g);
       marker.append(glyphEl);
       const tip = document.createElement("div");
       tip.className = "cc-tip";
@@ -316,6 +374,15 @@ export class Surface {
     });
     this.reposition();
     this.startTicker();
+  }
+
+  focusPin(key: string | null): void {
+    for (const pin of this.pins) {
+      pin.el.classList.remove("cc-pin-wrap--focus");
+    }
+    if (!key) return;
+    const target = this.pins.find((p) => p.model.key === key);
+    if (target) target.el.classList.add("cc-pin-wrap--focus");
   }
 
   private closeComposer(): void {
@@ -362,19 +429,29 @@ export class Surface {
     if (this.composerAnchor && this.composerHighlight && this.composer) {
       const rect = this.composerAnchor.getBoundingClientRect();
       place(this.composerHighlight, this.composerAnchor);
-      this.composer.style.left = `${rect.left + window.scrollX}px`;
-      this.composer.style.top = `${rect.bottom + window.scrollY + 8}px`;
+      const panelW = 264;
+      const panelH = this.composer.offsetHeight || 220;
+      const clampedLeft = Math.min(
+        Math.max(8 + window.scrollX, rect.left + window.scrollX),
+        window.scrollX + window.innerWidth - panelW - 8,
+      );
+      const fitsBelow = rect.bottom + panelH + 8 <= window.innerHeight;
+      const topRaw = fitsBelow
+        ? rect.bottom + window.scrollY + 8
+        : Math.max(window.scrollY + 8, rect.top + window.scrollY - panelH - 8);
+      this.composer.style.left = `${clampedLeft}px`;
+      this.composer.style.top = `${topRaw}px`;
     }
   }
 }
 
-function menuButton(glyphText: string, label: string, onClick: () => void): HTMLButtonElement {
+function menuButton(glyphEl: SVGSVGElement, label: string, onClick: () => void): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "cc-menu-btn";
   const g = document.createElement("span");
   g.className = "cc-menu-glyph";
-  g.textContent = glyphText;
+  g.append(glyphEl);
   const l = document.createElement("span");
   l.textContent = label;
   btn.append(g, l);
@@ -393,10 +470,10 @@ function place(box: HTMLElement, target: Element): void {
   box.style.height = `${rect.height}px`;
 }
 
-function glyph(kind: PinModel["kind"]): string {
-  if (kind === "style") return "◑";
-  if (kind === "text") return "T";
-  return "";
+function glyph(kind: PinModel["kind"]): SVGSVGElement | null {
+  if (kind === "style") return icon(ICON_COLOR, "cc-pin-glyph");
+  if (kind === "text") return icon(ICON_TEXT, "cc-pin-glyph");
+  return null;
 }
 
 function resolve(xpath: string): Element | null {
