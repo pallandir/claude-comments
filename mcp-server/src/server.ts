@@ -1,20 +1,17 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Broker } from "./broker.js";
+import { MCP_MAX_WAIT_MS, POLL_HEARTBEAT_TTL_MS, VERSION } from "./config.js";
 import type { CommentStore } from "./store.js";
 import type { Comment } from "./types.js";
 import { ratingResultSchema } from "./validate.js";
 
 const statusEnum = z.enum(["open", "resolved", "wontfix"]);
-const BOUND_TTL_MS = 35_000;
-// A single wait must end well before the bound TTL so the heartbeat written at
-// its start cannot go stale and let another session steal ownership mid-wait.
-const MAX_WAIT_MS = 20_000;
 
 export function createMcpServer(store: CommentStore, broker: Broker = new Broker()): McpServer {
   const server = new McpServer({
     name: "redline",
-    version: "1.0.0",
+    version: VERSION,
   });
 
   server.tool(
@@ -38,7 +35,7 @@ export function createMcpServer(store: CommentStore, broker: Broker = new Broker
     async ({ sinceVersion, timeoutMs }) => {
       broker.markPolled();
       const since = sinceVersion ?? broker.currentVersion;
-      const version = await broker.wait(since, Math.min(timeoutMs ?? 25000, MAX_WAIT_MS));
+      const version = await broker.wait(since, Math.min(timeoutMs ?? 25000, MCP_MAX_WAIT_MS));
       const open = (await store.list("open")).length;
       const deferred = (await store.listDeferred()).length;
       const pendingRatings = (await store.listRatingRequests("pending")).length;
@@ -48,7 +45,7 @@ export function createMcpServer(store: CommentStore, broker: Broker = new Broker
           openComments: open,
           deferred,
           pendingRatings,
-          bound: broker.isBoundAlive(BOUND_TTL_MS),
+          bound: broker.isBoundAlive(POLL_HEARTBEAT_TTL_MS),
         }),
       );
     },

@@ -1,13 +1,12 @@
 import { createHmac } from "node:crypto";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { Broker } from "./broker.js";
+import { HTTP_WAIT_TIMEOUT_MS, SESSION_ALIVE_TTL_MS } from "./config.js";
 import type { CommentStore } from "./store.js";
 import { parseIncoming, parseRatingRequest } from "./validate.js";
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const SERVICE = "redline";
-const WAIT_TIMEOUT_MS = 25_000;
-const BOUND_TTL_MS = 300_000;
 
 export interface IngestServer {
   port: number;
@@ -109,7 +108,7 @@ async function handle(
       pid: broker.pid,
       version: broker.currentVersion,
       lastPolledAt: broker.lastPolledAt,
-      watching: broker.isBoundAlive(BOUND_TTL_MS),
+      watching: broker.isBoundAlive(SESSION_ALIVE_TTL_MS),
       notices: broker.pendingNotices,
       pendingRatings,
     });
@@ -155,7 +154,7 @@ async function handle(
     const raw = query(req.url, "since");
     const since = raw === null ? broker.currentVersion : Number(raw);
     const base = Number.isFinite(since) ? since : broker.currentVersion;
-    await broker.wait(base, WAIT_TIMEOUT_MS);
+    await broker.wait(base, HTTP_WAIT_TIMEOUT_MS);
     json(res, 200, await snapshot(store, broker));
     return;
   }
@@ -268,7 +267,7 @@ async function snapshot(store: CommentStore, broker: Broker) {
     version: broker.currentVersion,
     lastPolledAt: broker.lastPolledAt,
     comments: await store.list(),
-    watching: broker.isBoundAlive(BOUND_TTL_MS),
+    watching: broker.isBoundAlive(SESSION_ALIVE_TTL_MS),
     notices: broker.pendingNotices,
   };
 }

@@ -10,7 +10,7 @@ import {
   fetchRating,
   fetchServerComments,
   flush,
-  getSessionId,
+  getSessionToken,
   isLocalUrl,
   listForUrl,
   remove,
@@ -122,7 +122,7 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
       if (!local) return { ok: true, status: offlineStatus() };
       const st = await status();
       const rating = sender.tab?.url ? await fetchRating(sender.tab.url) : null;
-      return { ok: true, status: { ...st, sessionId: await getSessionId(), rating } };
+      return { ok: true, status: { ...st, sessionId: await getSessionToken(), rating } };
     }
     case "request-rating": {
       if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true };

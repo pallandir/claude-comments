@@ -1,6 +1,10 @@
+import { resolveXPath } from "../lib/xpath.js";
 import type { PinModel } from "../messages.js";
 import { ICON_COLOR, ICON_COMMENT, ICON_TEXT, ICON_WARNING, icon } from "./icons.js";
 import overlayCss from "./overlay.css?inline";
+
+const OVERLAY_MARGIN = 8;
+const COMPOSER_WIDTH = 264;
 
 interface ActivePin {
   model: PinModel;
@@ -137,12 +141,12 @@ export class Surface {
     const preferAbove = above > window.scrollY + 8;
     const topRaw = preferAbove ? above : below;
     const clampedTop = Math.min(
-      Math.max(window.scrollY + 8, topRaw),
-      window.scrollY + window.innerHeight - menuH - 8,
+      Math.max(window.scrollY + OVERLAY_MARGIN, topRaw),
+      window.scrollY + window.innerHeight - menuH - OVERLAY_MARGIN,
     );
     const clampedLeft = Math.min(
-      Math.max(8 + window.scrollX, rect.left + window.scrollX),
-      window.scrollX + window.innerWidth - menuW - 8,
+      Math.max(OVERLAY_MARGIN + window.scrollX, rect.left + window.scrollX),
+      window.scrollX + window.innerWidth - menuW - OVERLAY_MARGIN,
     );
     menu.style.top = `${clampedTop}px`;
     menu.style.left = `${clampedLeft}px`;
@@ -370,7 +374,7 @@ export class Surface {
         });
       }
       this.shadow.append(wrap);
-      return { model, el: wrap, anchor: resolve(model.operator) };
+      return { model, el: wrap, anchor: resolveXPath(model.operator) };
     });
     this.reposition();
     this.startTicker();
@@ -412,7 +416,7 @@ export class Surface {
 
   private reposition(): void {
     for (const pin of this.pins) {
-      if (!pin.anchor?.isConnected) pin.anchor = resolve(pin.model.operator);
+      if (!pin.anchor?.isConnected) pin.anchor = resolveXPath(pin.model.operator);
       if (!pin.anchor) {
         pin.el.style.display = "none";
         continue;
@@ -429,16 +433,18 @@ export class Surface {
     if (this.composerAnchor && this.composerHighlight && this.composer) {
       const rect = this.composerAnchor.getBoundingClientRect();
       place(this.composerHighlight, this.composerAnchor);
-      const panelW = 264;
       const panelH = this.composer.offsetHeight || 220;
       const clampedLeft = Math.min(
-        Math.max(8 + window.scrollX, rect.left + window.scrollX),
-        window.scrollX + window.innerWidth - panelW - 8,
+        Math.max(OVERLAY_MARGIN + window.scrollX, rect.left + window.scrollX),
+        window.scrollX + window.innerWidth - COMPOSER_WIDTH - OVERLAY_MARGIN,
       );
-      const fitsBelow = rect.bottom + panelH + 8 <= window.innerHeight;
+      const fitsBelow = rect.bottom + panelH + OVERLAY_MARGIN <= window.innerHeight;
       const topRaw = fitsBelow
-        ? rect.bottom + window.scrollY + 8
-        : Math.max(window.scrollY + 8, rect.top + window.scrollY - panelH - 8);
+        ? rect.bottom + window.scrollY + OVERLAY_MARGIN
+        : Math.max(
+            window.scrollY + OVERLAY_MARGIN,
+            rect.top + window.scrollY - panelH - OVERLAY_MARGIN,
+          );
       this.composer.style.left = `${clampedLeft}px`;
       this.composer.style.top = `${topRaw}px`;
     }
@@ -474,19 +480,4 @@ function glyph(kind: PinModel["kind"]): SVGSVGElement | null {
   if (kind === "style") return icon(ICON_COLOR, "cc-pin-glyph");
   if (kind === "text") return icon(ICON_TEXT, "cc-pin-glyph");
   return null;
-}
-
-function resolve(xpath: string): Element | null {
-  try {
-    const result = document.evaluate(
-      xpath,
-      document,
-      null,
-      XPathResult.FIRST_ORDERED_NODE_TYPE,
-      null,
-    );
-    return result.singleNodeValue as Element | null;
-  } catch {
-    return null;
-  }
 }

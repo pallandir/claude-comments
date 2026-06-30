@@ -1,6 +1,7 @@
 import { captureElement } from "../lib/fingerprint.js";
 import { resolveSource } from "../lib/source-map.js";
 import { isLocalUrl } from "../lib/transport.js";
+import { resolveXPath } from "../lib/xpath.js";
 import type { Message, PageRating, PinModel, QueueStatus, Response } from "../messages.js";
 import type { DraftRequest, Operation, Rect } from "../types.js";
 import { Drawer, type DrawerContext } from "./drawer.js";
@@ -27,16 +28,30 @@ function pageMode(): Mode {
   return isLocalUrl(location.href) ? "local" : "remote";
 }
 
+interface ContentState {
+  active: boolean;
+  picking: boolean;
+  interacting: boolean;
+  drawerOpen: boolean;
+  lastPins: PinModel[];
+  lastStatus: QueueStatus | null;
+  lastRating: PageRating | null;
+  lastWatching: boolean;
+  pollTimer: number | null;
+}
+
 function init(): void {
-  let active = false;
-  let picking = true;
-  let interacting = false;
-  let drawerOpen = false;
-  let lastPins: PinModel[] = [];
-  let lastStatus: QueueStatus | null = null;
-  let lastRating: PageRating | null = null;
-  let lastWatching = false;
-  let pollTimer: number | null = null;
+  const st: ContentState = {
+    active: false,
+    picking: true,
+    interacting: false,
+    drawerOpen: false,
+    lastPins: [],
+    lastStatus: null,
+    lastRating: null,
+    lastWatching: false,
+    pollTimer: null,
+  };
   const mode = pageMode();
 
   const surface = new Surface();
@@ -56,17 +71,17 @@ function init(): void {
   });
 
   function setActive(on: boolean): void {
-    if (on === active) return;
-    active = on;
+    if (on === st.active) return;
+    st.active = on;
     if (on) {
-      picking = true;
+      st.picking = true;
       toolbar = new Toolbar(surface, {
         onComments: toggleDrawer,
         onSend: () => void handleSend(),
         onHandoff: handleHandoff,
         onReset: handleReset,
         onDismissNotice: (id) => void handleDismissNotice(id),
-        onTogglePick: () => setPicking(!picking),
+        onTogglePick: () => setPicking(!st.picking),
       });
       drawer = new Drawer(surface, {
         onEdit: (cid, text) => void editComment(cid, text),
@@ -87,22 +102,22 @@ function init(): void {
       drawer?.destroy();
       toolbar = null;
       drawer = null;
-      picking = true;
-      interacting = false;
-      drawerOpen = false;
+      st.picking = true;
+      st.interacting = false;
+      st.drawerOpen = false;
       surface.unmount();
     }
     updateCursor();
   }
 
   function setPicking(on: boolean): void {
-    if (on === picking) return;
-    picking = on;
+    if (on === st.picking) return;
+    st.picking = on;
     if (!on) {
       surface.highlightHover(null);
       surface.setSelection(null);
       surface.closeActionMenu();
-      interacting = false;
+      st.interacting = false;
     }
     updateCursor();
     render();
@@ -111,7 +126,7 @@ function init(): void {
   document.addEventListener(
     "mousemove",
     (event) => {
-      if (!active || !picking || interacting) return;
+      if (!st.active || !st.picking || st.interacting) return;
       if (surface.ownsEvent(event)) {
         surface.highlightHover(null);
         return;
@@ -124,7 +139,7 @@ function init(): void {
   document.addEventListener(
     "click",
     (event) => {
-      if (!active || !picking || interacting || surface.ownsEvent(event)) return;
+      if (!st.active || !st.picking || st.interacting || surface.ownsEvent(event)) return;
       event.preventDefault();
       event.stopPropagation();
       surface.highlightHover(null);
@@ -136,7 +151,8 @@ function init(): void {
   document.addEventListener(
     "keydown",
     (event) => {
-      if (active && picking && !interacting && event.key === "Escape") surface.setSelection(null);
+      if (st.active && st.picking && !st.interacting && event.key === "Escape")
+        surface.setSelection(null);
     },
     true,
   );
@@ -145,14 +161,14 @@ function init(): void {
     surface.setSelection(el);
     render();
 
-    interacting = true;
+    st.interacting = true;
     updateCursor();
     surface.showActionMenu(el, {
       onComment: () => runTool("comment", el),
       onColor: () => runTool("color", el),
       onText: () => runTool("text", el),
       onDismiss: () => {
-        interacting = false;
+        st.interacting = false;
         updateCursor();
       },
     });
@@ -160,10 +176,10 @@ function init(): void {
 
   function runTool(which: Exclude<ToolId, "select">, el: Element): void {
     surface.closeActionMenu();
-    interacting = true;
+    st.interacting = true;
     updateCursor();
     const done = () => {
-      interacting = false;
+      st.interacting = false;
       updateCursor();
     };
 
@@ -210,16 +226,16 @@ function init(): void {
   }
 
   function toggleDrawer(): void {
-    drawerOpen = !drawerOpen;
-    drawer?.setOpen(drawerOpen, lastPins, drawerCtx());
+    st.drawerOpen = !st.drawerOpen;
+    drawer?.setOpen(st.drawerOpen, st.lastPins, drawerCtx());
     render();
   }
 
   function drawerCtx(): DrawerContext {
     return {
       mode,
-      connected: Boolean(lastStatus?.serverReachable) && Boolean(lastStatus?.watching),
-      watching: Boolean(lastStatus?.watching),
+      connected: Boolean(st.lastStatus?.serverReachable) && Boolean(st.lastStatus?.watching),
+      watching: Boolean(st.lastStatus?.watching),
     };
   }
 
@@ -274,8 +290,8 @@ function init(): void {
     const screenshot = await captureRegion(rect);
     surface.setHidden(false);
     await send({ type: "request-rating", url: location.href, screenshotDataUrl: screenshot });
-    lastRating = { id: "pending", status: "pending" };
-    drawer?.setRating(lastRating);
+    st.lastRating = { id: "pending", status: "pending" };
+    drawer?.setRating(st.lastRating);
     await refresh();
   }
 
@@ -285,21 +301,21 @@ function init(): void {
   }
 
   function startPolling(): void {
-    if (pollTimer !== null) return;
-    pollTimer = window.setInterval(() => void pollStatus(), STATUS_POLL_MS);
+    if (st.pollTimer !== null) return;
+    st.pollTimer = window.setInterval(() => void pollStatus(), STATUS_POLL_MS);
   }
 
   function stopPolling(): void {
-    if (pollTimer === null) return;
-    window.clearInterval(pollTimer);
-    pollTimer = null;
+    if (st.pollTimer === null) return;
+    window.clearInterval(st.pollTimer);
+    st.pollTimer = null;
   }
 
   async function pollStatus(): Promise<void> {
-    if (!active) return;
+    if (!st.active) return;
     const res = await send({ type: "queue-status" });
     const next = res.ok ? (res.status ?? null) : null;
-    if (!statusChanged(lastStatus, next)) return;
+    if (!statusChanged(st.lastStatus, next)) return;
     await refresh();
   }
 
@@ -319,10 +335,10 @@ function init(): void {
   }
 
   async function handleReset(): Promise<void> {
-    const total = lastPins.length;
+    const total = st.lastPins.length;
     if (total === 0) return;
 
-    interacting = true;
+    st.interacting = true;
     updateCursor();
     surface.showModal({
       title: "Delete all comments?",
@@ -336,7 +352,7 @@ function init(): void {
         },
       ],
       onDismiss: () => {
-        interacting = false;
+        st.interacting = false;
         updateCursor();
       },
     });
@@ -352,22 +368,22 @@ function init(): void {
       send({ type: "page-comments", url: location.href }),
       send({ type: "queue-status" }),
     ]);
-    lastPins = pinsRes.ok && pinsRes.pins ? pinsRes.pins : [];
-    lastStatus = statusRes.ok ? (statusRes.status ?? null) : null;
+    st.lastPins = pinsRes.ok && pinsRes.pins ? pinsRes.pins : [];
+    st.lastStatus = statusRes.ok ? (statusRes.status ?? null) : null;
     const newRating = statusRes.ok ? (statusRes.status?.rating ?? null) : null;
     if (newRating !== null) {
-      lastRating = newRating;
-      drawer?.setRating(lastRating);
+      st.lastRating = newRating;
+      drawer?.setRating(st.lastRating);
     }
-    const nowWatching = Boolean(lastStatus?.watching);
-    if (nowWatching && !lastWatching && !lastRating) void publishPageRating();
-    lastWatching = nowWatching;
-    surface.setPins(lastPins, (key) => void removePin(key));
+    const nowWatching = Boolean(st.lastStatus?.watching);
+    if (nowWatching && !st.lastWatching && !st.lastRating) void publishPageRating();
+    st.lastWatching = nowWatching;
+    surface.setPins(st.lastPins, (key) => void removePin(key));
     render();
   }
 
   async function removePin(cid: string): Promise<void> {
-    const pin = lastPins.find((p) => p.key === cid);
+    const pin = st.lastPins.find((p) => p.key === cid);
     if (pin && (pin.kind === "style" || pin.kind === "text") && pin.operation?.from != null) {
       const el = resolveXPath(pin.operator);
       if (el instanceof HTMLElement) {
@@ -393,20 +409,21 @@ function init(): void {
   }
 
   function render(): void {
-    const activeCount = lastPins.filter((p) => p.status !== "resolved").length;
+    const activeCount = st.lastPins.filter((p) => p.status !== "resolved").length;
     toolbar?.render({
       mode,
       count: activeCount,
-      status: lastStatus,
-      drawerOpen,
-      sessionId: lastStatus?.sessionId ?? null,
-      picking,
+      status: st.lastStatus,
+      drawerOpen: st.drawerOpen,
+      sessionId: st.lastStatus?.sessionId ?? null,
+      picking: st.picking,
     });
-    drawer?.render(lastPins, drawerCtx());
+    drawer?.render(st.lastPins, drawerCtx());
   }
 
   function updateCursor(): void {
-    document.documentElement.style.cursor = active && picking && !interacting ? "crosshair" : "";
+    document.documentElement.style.cursor =
+      st.active && st.picking && !st.interacting ? "crosshair" : "";
   }
 
   function nextPaint(): Promise<void> {
@@ -437,19 +454,4 @@ function ratingKey(r: QueueStatus["rating"]): string {
 
 function noticesKey(notices: QueueStatus["notices"]): string {
   return notices?.map((n) => n.commentId).join(",") ?? "";
-}
-
-function resolveXPath(xpath: string): Element | null {
-  try {
-    const result = document.evaluate(
-      xpath,
-      document,
-      null,
-      XPathResult.FIRST_ORDERED_NODE_TYPE,
-      null,
-    );
-    return result.singleNodeValue as Element | null;
-  } catch {
-    return null;
-  }
 }

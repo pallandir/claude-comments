@@ -9,8 +9,17 @@ import type {
 
 const QUEUE_KEY = "redline-queue";
 const SESSION_KEY = "redline-session-id";
+const SESSION_TOKEN_KEY = "redline-session-token";
 const PORTS = [7474, 7475, 7476];
 const PROBE_TIMEOUT_MS = 400;
+const SERVER_CACHE_TTL_MS = 30_000;
+
+interface CachedServer {
+  info: ServerInfo;
+  cachedAt: number;
+}
+
+let serverCache: CachedServer | null = null;
 
 export interface ServerComment {
   id: string;
@@ -101,6 +110,15 @@ export async function getSessionId(): Promise<string> {
   return id;
 }
 
+export async function getSessionToken(): Promise<string> {
+  const stored = await chrome.storage.local.get(SESSION_TOKEN_KEY);
+  const existing = stored[SESSION_TOKEN_KEY] as string | undefined;
+  if (existing) return existing;
+  const token = crypto.randomUUID();
+  await chrome.storage.local.set({ [SESSION_TOKEN_KEY]: token });
+  return token;
+}
+
 export async function enqueue(draft: DraftRequest): Promise<QueuedRequest> {
   const queue = await getQueue();
   const item: QueuedRequest = { ...draft, cid: crypto.randomUUID(), queuedAt: Date.now() };
@@ -133,7 +151,7 @@ export async function clearServerForUrl(url: string): Promise<void> {
       server.token,
     );
   } catch {
-    // server gone; local clear already happened
+    serverCache = null;
   }
 }
 
@@ -144,7 +162,7 @@ export async function clearAll(): Promise<void> {
   try {
     await request("DELETE", server.port, "/comments?all=true", undefined, server.token);
   } catch {
-    // server gone; local clear already happened
+    serverCache = null;
   }
 }
 
@@ -158,6 +176,7 @@ export async function countAll(): Promise<number> {
     const all = (await res.json()) as unknown[];
     return local + all.length;
   } catch {
+    serverCache = null;
     return local;
   }
 }
@@ -211,6 +230,13 @@ async function hmacHex(key: string, message: string): Promise<string> {
     .join("");
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 async function verifyServer(port: number, token: string): Promise<boolean> {
   const nonce = crypto.randomUUID();
   try {
@@ -223,18 +249,19 @@ async function verifyServer(port: number, token: string): Promise<boolean> {
     const body = (await res.json()) as { hmac?: string };
     if (!body.hmac || typeof body.hmac !== "string") return false;
     const expected = await hmacHex(token, nonce);
-    return body.hmac === expected;
+    return timingSafeEqual(body.hmac, expected);
   } catch {
     return false;
   }
 }
 
-// Probe all known ports and return the most recently started server that can
-// prove it knows the session token via HMAC challenge-response. A port-squatting
-// process cannot produce the correct HMAC without the token, which only reaches
-// the real server over the trusted MCP stdio channel (never over HTTP).
 async function findServer(): Promise<ServerInfo | null> {
-  const token = await getSessionId();
+  if (serverCache && Date.now() - serverCache.cachedAt < SERVER_CACHE_TTL_MS) {
+    return serverCache.info;
+  }
+  serverCache = null;
+
+  const token = await getSessionToken();
   const candidates = (await Promise.all(PORTS.map(probe))).filter(
     (r): r is ServerCandidate => r !== null,
   );
@@ -242,7 +269,9 @@ async function findServer(): Promise<ServerInfo | null> {
 
   for (const candidate of candidates.sort((a, b) => b.startedAt.localeCompare(a.startedAt))) {
     if (await verifyServer(candidate.port, token)) {
-      return { ...candidate, token };
+      const info: ServerInfo = { ...candidate, token };
+      serverCache = { info, cachedAt: Date.now() };
+      return info;
     }
   }
   return null;
@@ -257,6 +286,7 @@ export async function fetchServerComments(url: string): Promise<ServerComment[]>
     const all = (await res.json()) as ServerComment[];
     return all.filter((c) => c.url === url);
   } catch {
+    serverCache = null;
     return [];
   }
 }
@@ -267,7 +297,7 @@ export async function dismissNotice(commentId: string): Promise<void> {
   try {
     await request("POST", server.port, "/notices/dismiss", { commentId }, server.token);
   } catch {
-    // server gone; toolbar will clear on next poll when notice is absent
+    serverCache = null;
   }
 }
 
@@ -336,7 +366,7 @@ export async function reopenComment(id: string, note?: string): Promise<void> {
   try {
     await request("POST", server.port, "/comments/reopen", { id, note }, server.token);
   } catch {
-    // best-effort
+    serverCache = null;
   }
 }
 
@@ -353,7 +383,7 @@ export async function requestRating(url: string, screenshotDataUrl: string | nul
       server.token,
     );
   } catch {
-    // best-effort; missing rating is non-fatal
+    serverCache = null;
   }
 }
 
@@ -383,6 +413,7 @@ export async function fetchRating(url: string): Promise<PageRating | null> {
     const latest = forUrl[0];
     return { id: latest.id, status: latest.status, result: latest.result };
   } catch {
+    serverCache = null;
     return null;
   }
 }

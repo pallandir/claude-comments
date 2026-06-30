@@ -41,6 +41,7 @@ export class CommentStore {
   private readonly shotsPath: string;
   private readonly deferredPath: string;
   private readonly ratingsPath: string;
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(root: string) {
     this.storeRoot = root;
@@ -65,15 +66,12 @@ export class CommentStore {
   }
 
   async add(incoming: IncomingComment, projectRoot?: string): Promise<Comment> {
-    const comments = await this.read();
-    const id = `c${comments.length + 1}-${randomUUID().slice(0, 6)}`;
+    const id = `c-${randomUUID().slice(0, 8)}`;
     const screenshot = incoming.screenshotDataUrl
       ? await this.saveShot(id, incoming.screenshotDataUrl)
       : null;
-
     const root = projectRoot ?? this.storeRoot;
     const safeSource = confineSourcePath(incoming.source ?? null, root);
-
     const comment: Comment = {
       id,
       createdAt: new Date().toISOString(),
@@ -88,42 +86,53 @@ export class CommentStore {
       sessionId: incoming.sessionId,
       planFirst: incoming.planFirst ?? false,
     };
-    comments.push(comment);
-    await this.write(comments);
-    return comment;
+    return this.enqueue(async () => {
+      const comments = await this.read();
+      comments.push(comment);
+      await this.write(comments);
+      return comment;
+    });
   }
 
   async setStatus(id: string, status: CommentStatus): Promise<Comment | undefined> {
-    const comments = await this.read();
-    const comment = comments.find((c) => c.id === id);
-    if (!comment) return undefined;
-    comment.status = status;
-    await this.write(comments);
-    return comment;
+    return this.enqueue(async () => {
+      const comments = await this.read();
+      const comment = comments.find((c) => c.id === id);
+      if (!comment) return undefined;
+      comment.status = status;
+      await this.write(comments);
+      return comment;
+    });
   }
 
   async reopenWithNote(id: string, note?: string): Promise<Comment | undefined> {
-    const comments = await this.read();
-    const comment = comments.find((c) => c.id === id);
-    if (!comment) return undefined;
-    comment.status = "open";
-    if (note) comment.comment = `${comment.comment}\n\n${note}`;
-    await this.write(comments);
-    return comment;
+    return this.enqueue(async () => {
+      const comments = await this.read();
+      const comment = comments.find((c) => c.id === id);
+      if (!comment) return undefined;
+      comment.status = "open";
+      if (note) comment.comment = `${comment.comment}\n\n${note}`;
+      await this.write(comments);
+      return comment;
+    });
   }
 
   async clearResolved(): Promise<number> {
-    const comments = await this.read();
-    const kept = comments.filter((c) => c.status === "open");
-    await this.write(kept);
-    return comments.length - kept.length;
+    return this.enqueue(async () => {
+      const comments = await this.read();
+      const kept = comments.filter((c) => c.status === "open");
+      await this.write(kept);
+      return comments.length - kept.length;
+    });
   }
 
   async clear(url?: string): Promise<number> {
-    const comments = await this.read();
-    const kept = url ? comments.filter((c) => c.url !== url) : [];
-    await this.write(kept);
-    return comments.length - kept.length;
+    return this.enqueue(async () => {
+      const comments = await this.read();
+      const kept = url ? comments.filter((c) => c.url !== url) : [];
+      await this.write(kept);
+      return comments.length - kept.length;
+    });
   }
 
   async listDeferred(): Promise<DeferredComment[]> {
@@ -136,28 +145,27 @@ export class CommentStore {
     reason: string,
     flaggedBy: "user" | "claude",
   ): Promise<DeferredComment> {
-    const existing = await this.listDeferred();
-    const found = existing.find((d) => d.id === origin.id);
-    if (found) {
-      return found;
-    }
-    const entry: DeferredComment = {
-      id: origin.id,
-      createdAt: new Date().toISOString(),
-      page: origin.metadata.page,
-      operationType: origin.operation.type,
-      comment: origin.comment,
-      reason,
-      flaggedBy,
-    };
-    existing.push(entry);
-    await writeFileAtomic(this.deferredPath, serializeDeferred(existing));
-    return entry;
+    return this.enqueue(async () => {
+      const existing = await this.listDeferred();
+      const found = existing.find((d) => d.id === origin.id);
+      if (found) return found;
+      const entry: DeferredComment = {
+        id: origin.id,
+        createdAt: new Date().toISOString(),
+        page: origin.metadata.page,
+        operationType: origin.operation.type,
+        comment: origin.comment,
+        reason,
+        flaggedBy,
+      };
+      existing.push(entry);
+      await writeFileAtomic(this.deferredPath, serializeDeferred(existing));
+      return entry;
+    });
   }
 
   async addRatingRequest(incoming: IncomingRatingRequest): Promise<RatingRequest> {
-    const ratings = await this.readRatings();
-    const id = `r${ratings.length + 1}-${randomUUID().slice(0, 6)}`;
+    const id = `r-${randomUUID().slice(0, 8)}`;
     const screenshot = incoming.screenshotDataUrl
       ? await this.saveShot(id, incoming.screenshotDataUrl)
       : null;
@@ -169,9 +177,12 @@ export class CommentStore {
       sessionId: incoming.sessionId,
       status: "pending",
     };
-    ratings.push(entry);
-    await this.writeRatings(ratings);
-    return entry;
+    return this.enqueue(async () => {
+      const ratings = await this.readRatings();
+      ratings.push(entry);
+      await this.writeRatings(ratings);
+      return entry;
+    });
   }
 
   async listRatingRequests(status?: RatingStatus): Promise<RatingRequest[]> {
@@ -184,13 +195,15 @@ export class CommentStore {
   }
 
   async setRatingScore(id: string, result: RatingResult): Promise<RatingRequest | undefined> {
-    const ratings = await this.readRatings();
-    const entry = ratings.find((r) => r.id === id);
-    if (!entry) return undefined;
-    entry.status = "scored";
-    entry.result = result;
-    await this.writeRatings(ratings);
-    return entry;
+    return this.enqueue(async () => {
+      const ratings = await this.readRatings();
+      const entry = ratings.find((r) => r.id === id);
+      if (!entry) return undefined;
+      entry.status = "scored";
+      entry.result = result;
+      await this.writeRatings(ratings);
+      return entry;
+    });
   }
 
   async latestScoredRatingForUrl(url: string): Promise<RatingRequest | undefined> {
@@ -212,6 +225,15 @@ export class CommentStore {
 
   private async writeRatings(ratings: RatingRequest[]): Promise<void> {
     await writeFileAtomic(this.ratingsPath, JSON.stringify(ratings, null, 2));
+  }
+
+  private enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.writeQueue.then(fn);
+    this.writeQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private async saveShot(id: string, dataUrl: string): Promise<string> {

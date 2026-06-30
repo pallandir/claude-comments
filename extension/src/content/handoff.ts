@@ -40,7 +40,7 @@ function buildHandoffMarkdown(requests: QueuedRequest[]): string {
     }
     lines.push(`- Element: <code>${escapeHtml(r.operator)}</code>`);
     lines.push(`- Page: ${escapeHtml(r.url)}`, "");
-    if (r.screenshotDataUrl)
+    if (r.screenshotDataUrl && isDataImageUrl(r.screenshotDataUrl))
       lines.push(`<img alt="item ${i + 1}" src="${r.screenshotDataUrl}">`, "");
   });
 
@@ -89,4 +89,10 @@ function safeHost(url: string): string {
   } catch {
     return "frontend";
   }
+}
+
+function isDataImageUrl(s: string): boolean {
+  if (!s.startsWith("data:image/")) return false;
+  const semi = s.indexOf(";base64,", 11);
+  return semi > 11 && /^[a-z]+$/.test(s.slice(11, semi));
 }

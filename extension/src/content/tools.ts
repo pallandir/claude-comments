@@ -1,6 +1,9 @@
 import type { Operation } from "../types.js";
 import type { Surface } from "./surface.js";
 
+const OVERLAY_MARGIN = 8;
+const TOOL_PANEL_WIDTH = 240;
+
 export function openColorPanel(
   surface: Surface,
   el: HTMLElement,
@@ -153,10 +156,10 @@ function field(
 
 function positionNear(box: HTMLElement, el: Element): void {
   const rect = el.getBoundingClientRect();
-  const left = Math.min(rect.left, window.innerWidth - 240);
-  const top = Math.min(rect.bottom + 8, window.innerHeight - 120);
-  box.style.left = `${Math.max(8, left) + window.scrollX}px`;
-  box.style.top = `${Math.max(8, top) + window.scrollY}px`;
+  const left = Math.min(rect.left, window.innerWidth - TOOL_PANEL_WIDTH);
+  const top = Math.min(rect.bottom + OVERLAY_MARGIN, window.innerHeight - 120);
+  box.style.left = `${Math.max(OVERLAY_MARGIN, left) + window.scrollX}px`;
+  box.style.top = `${Math.max(OVERLAY_MARGIN, top) + window.scrollY}px`;
 }
 
 function selectAll(el: Element): void {

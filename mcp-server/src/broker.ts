@@ -1,9 +1,9 @@
+import { OWNERSHIP_TTL_MS } from "./config.js";
 import type { DeferralNotice } from "./types.js";
 
 type Waiter = (version: number) => void;
 
 const MAX_NOTICES = 20;
-const OWNERSHIP_TTL_MS = 300_000;
 
 export class Broker {
   readonly startedAt = new Date().toISOString();
