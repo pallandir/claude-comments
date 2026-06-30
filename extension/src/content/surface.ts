@@ -45,7 +45,7 @@ export class Surface {
   constructor() {
     this.host = document.createElement("div");
     this.host.id = "redline-root";
-    this.shadow = this.host.attachShadow({ mode: "open" });
+    this.shadow = this.host.attachShadow({ mode: "closed" });
     const style = document.createElement("style");
     style.textContent = overlayCss;
     this.shadow.append(style);

@@ -3,8 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-import { CommentStore } from "./store.js";
-import type { IncomingComment } from "./types.js";
+import { CommentStore } from "../src/store.js";
+import type { IncomingComment } from "../src/types.js";
 
 let root: string;
 
@@ -29,7 +29,7 @@ function sample(overrides: Partial<IncomingComment> = {}): IncomingComment {
   };
 }
 
-test("add then list round-trips core fields through the markdown store", async () => {
+test("add then list round-trips core fields", async () => {
   const store = new CommentStore(root);
   const added = await store.add(sample());
   const [got] = await store.list();
@@ -94,4 +94,56 @@ test("text operation survives a serialize/parse cycle", async () => {
   assert.equal(got.operation.type, "text");
   assert.equal(got.operation.from, "Submit");
   assert.equal(got.operation.to, "Save changes");
+});
+
+test("multi-line comment body round-trips intact", async () => {
+  const multiLine = "Line one\nLine two\nLine three";
+  const store = new CommentStore(root);
+  await store.add(sample({ comment: multiLine }));
+  const [got] = await store.list();
+  assert.equal(got.comment, multiLine);
+});
+
+test("comment with middot in page name round-trips intact", async () => {
+  const store = new CommentStore(root);
+  await store.add(
+    sample({ metadata: { page: "A · B · C", viewport: { w: 1440, h: 900 }, elementText: "hi" } }),
+  );
+  const [got] = await store.list();
+  assert.equal(got.metadata.page, "A · B · C");
+});
+
+test("text operation containing the arrow sequence round-trips intact", async () => {
+  const store = new CommentStore(root);
+  await store.add(
+    sample({
+      operation: {
+        type: "text",
+        property: null,
+        from: 'before " -> " after',
+        to: 'end " -> " done',
+      },
+    }),
+  );
+  const [got] = await store.list();
+  assert.equal(got.operation.from, 'before " -> " after');
+  assert.equal(got.operation.to, 'end " -> " done');
+});
+
+test("style operation with arrow-sequence values round-trips intact", async () => {
+  const store = new CommentStore(root);
+  await store.add(
+    sample({
+      operation: {
+        type: "style",
+        property: "content",
+        from: '"a -> b"',
+        to: '"c -> d"',
+      },
+    }),
+  );
+  const [got] = await store.list();
+  assert.equal(got.operation.property, "content");
+  assert.equal(got.operation.from, '"a -> b"');
+  assert.equal(got.operation.to, '"c -> d"');
 });

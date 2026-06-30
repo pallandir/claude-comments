@@ -1,5 +1,6 @@
 import { captureElement } from "../lib/fingerprint.js";
 import { resolveSource } from "../lib/source-map.js";
+import { isLocalUrl } from "../lib/transport.js";
 import type { Message, PageRating, PinModel, QueueStatus, Response } from "../messages.js";
 import type { DraftRequest, Operation, Rect } from "../types.js";
 import { Drawer, type DrawerContext } from "./drawer.js";
@@ -20,16 +21,10 @@ if (!window.__redlineLoaded) {
 }
 
 const STATUS_POLL_MS = 5000;
+const STYLE_ALLOWLIST = new Set(["color", "background-color"]);
 
 function pageMode(): Mode {
-  const host = location.hostname;
-  const local =
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "[::1]" ||
-    host.endsWith(".localhost") ||
-    host.endsWith(".local");
-  return local ? "local" : "remote";
+  return isLocalUrl(location.href) ? "local" : "remote";
 }
 
 function init(): void {
@@ -376,7 +371,11 @@ function init(): void {
     if (pin && (pin.kind === "style" || pin.kind === "text") && pin.operation?.from != null) {
       const el = resolveXPath(pin.operator);
       if (el instanceof HTMLElement) {
-        if (pin.kind === "style" && pin.operation.property) {
+        if (
+          pin.kind === "style" &&
+          pin.operation.property &&
+          STYLE_ALLOWLIST.has(pin.operation.property)
+        ) {
           el.style.setProperty(pin.operation.property, pin.operation.from);
         } else if (pin.kind === "text") {
           el.textContent = pin.operation.from;

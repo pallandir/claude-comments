@@ -15,7 +15,7 @@ export default defineManifest({
   // Page access comes solely from activeTab, granted per tab when the user clicks
   // the toolbar action and gone on navigation. No standing access to any site.
   // scripting lets the worker inject the overlay into that one tab on demand.
-  permissions: ["activeTab", "scripting", "storage", "unlimitedStorage", "alarms"],
+  permissions: ["activeTab", "scripting", "storage", "unlimitedStorage"],
   host_permissions: LOOPBACK_HOSTS,
   icons: {
     "16": "icon-16.png",

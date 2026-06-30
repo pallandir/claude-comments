@@ -14,7 +14,7 @@ const MAX_WAIT_MS = 20_000;
 export function createMcpServer(store: CommentStore, broker: Broker = new Broker()): McpServer {
   const server = new McpServer({
     name: "redline",
-    version: "0.1.0",
+    version: "1.0.0",
   });
 
   server.tool(
@@ -56,11 +56,11 @@ export function createMcpServer(store: CommentStore, broker: Broker = new Broker
 
   server.tool(
     "bind_session",
-    "Claim ownership of comment processing for this watch session by providing the session id shown in the browser toolbar. Call this once at the start of watch mode before processing any comments. Returns bound:true on success. If the id does not match the one published by the extension, returns bound:false with a reason. Re-call if wait_for_update ever returns bound:false (e.g. after a server restart).",
+    "Claim ownership of comment processing for this watch session by providing the session id shown in the browser toolbar. The session id is the credential — it is delivered here over the trusted MCP stdio channel and then used by the browser extension to authenticate over loopback HTTP. Returns bound:true on success. Returns bound:false if another session is already active (started within the last 5 minutes with a different id) — in that case wait for it to expire or call unbind_session first. Re-call after a server restart, since the binding resets.",
     { sessionId: z.string().min(1).max(200) },
     async ({ sessionId }) => {
       const result = broker.bindSession(sessionId);
-      return text(JSON.stringify(result));
+      return text(JSON.stringify({ bound: result.ok, reason: result.reason }));
     },
   );
 

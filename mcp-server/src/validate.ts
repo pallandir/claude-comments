@@ -7,7 +7,15 @@ const MAX_URL = 4_000;
 
 const sourceSchema = z
   .object({
-    path: z.string().max(MAX_SHORT),
+    path: z
+      .string()
+      .max(MAX_SHORT)
+      .refine((p) => !/[\p{Cc}~]/u.test(p), "invalid characters in source path")
+      .refine((p) => !p.split(/[/\\]/).some((s) => s === ".."), "path traversal not allowed")
+      .refine(
+        (p) => !/^[a-zA-Z]:/.test(p) && !p.startsWith("\\\\"),
+        "absolute drive paths not allowed",
+      ),
     line: z.number().int().nonnegative(),
     column: z.number().int().nonnegative(),
     via: z.string().max(MAX_SHORT),

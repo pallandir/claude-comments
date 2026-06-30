@@ -40,17 +40,17 @@ device, even when the page itself is remote.
   toolbar button, so Redline can read the element being commented on and capture
   a cropped screenshot of it. The extension has no access to any page before that
   click, and the access ends when the tab navigates.
-- **scripting** — inject the commenting toolbar into that one active tab on
+- **scripting** — injects the commenting toolbar into that one active tab on
   demand, in place of a declared content script, so the extension does not run on
   pages automatically.
 - **Host access (`http://localhost/*`, `http://127.0.0.1/*`, `http://*.localhost/*`)**
   — used only by the background service worker to reach the companion MCP server
   on loopback. This is not web-page access and does not let the extension contact
   any other site.
-- **storage / unlimitedStorage** — queue comments (which include screenshots)
+- **storage / unlimitedStorage** — queues comments (which include screenshots)
   locally so commenting works even when the assistant's server is not running,
   and drains automatically when it is.
-- **alarms** — periodically flush the local comment queue to the server.
+- **alarms** — periodically flushes the local comment queue to the server.
 
 ## Data use disclosures
 

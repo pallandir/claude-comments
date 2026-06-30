@@ -3,6 +3,7 @@ import type { DeferralNotice } from "./types.js";
 type Waiter = (version: number) => void;
 
 const MAX_NOTICES = 20;
+const OWNERSHIP_TTL_MS = 300_000;
 
 export class Broker {
   readonly startedAt = new Date().toISOString();
@@ -12,8 +13,8 @@ export class Broker {
   private lastPolled: string | null = null;
   private readonly waiters = new Set<Waiter>();
 
-  private expectedSessionId: string | null = null;
-  private boundSessionId: string | null = null;
+  private boundToken: string | null = null;
+  private boundTokenBuf: Buffer | null = null;
   private boundHeartbeatAt: string | null = null;
   private notices: DeferralNotice[] = [];
 
@@ -29,21 +30,13 @@ export class Broker {
     return [...this.notices];
   }
 
-  get expectedSession(): string | null {
-    return this.expectedSessionId;
-  }
-
-  get boundSession(): string | null {
-    return this.boundSessionId;
-  }
-
   get boundHeartbeat(): string | null {
     return this.boundHeartbeatAt;
   }
 
   markPolled(): void {
     this.lastPolled = new Date().toISOString();
-    if (this.boundSessionId) {
+    if (this.boundToken) {
       this.boundHeartbeatAt = new Date().toISOString();
     }
   }
@@ -68,35 +61,45 @@ export class Broker {
     });
   }
 
-  publishSession(id: string): void {
-    this.expectedSessionId = id;
-    this.bump();
-  }
-
-  bindSession(id: string): { ok: boolean; reason?: string } {
-    if (!this.expectedSessionId) {
-      return { ok: false, reason: "no-session-published" };
+  // Stores the token delivered by the user via the trusted MCP stdio channel.
+  // The token itself is the credential; a second caller with a different token
+  // is rejected while the first session is still alive, preventing silent theft.
+  bindSession(token: string): { ok: boolean; reason?: string } {
+    if (this.boundToken !== null && this.isBoundAlive(OWNERSHIP_TTL_MS)) {
+      if (!this.verifyToken(token)) {
+        return { ok: false, reason: "another session is already active" };
+      }
     }
-    if (id !== this.expectedSessionId) {
-      return { ok: false, reason: "id-mismatch" };
-    }
-    this.boundSessionId = id;
+    this.boundToken = token;
+    this.boundTokenBuf = Buffer.from(token);
     this.boundHeartbeatAt = new Date().toISOString();
     this.bump();
     return { ok: true };
   }
 
   unbindSession(): void {
-    this.boundSessionId = null;
+    this.boundToken = null;
+    this.boundTokenBuf = null;
     this.boundHeartbeatAt = null;
     this.bump();
   }
 
+  // Constant-time comparison to prevent timing side-channels.
+  verifyToken(candidate: string): boolean {
+    if (!this.boundTokenBuf) return false;
+    const buf = this.boundTokenBuf;
+    const a = Buffer.from(candidate);
+    if (a.length !== buf.length) return false;
+    return a.reduce((acc, byte, i) => acc | (byte ^ (buf[i] ?? 0)), 0) === 0;
+  }
+
+  get token(): string | null {
+    return this.boundToken;
+  }
+
   isBoundAlive(ttlMs: number): boolean {
     return (
-      this.boundSessionId !== null &&
-      this.expectedSessionId !== null &&
-      this.boundSessionId === this.expectedSessionId &&
+      this.boundToken !== null &&
       this.boundHeartbeatAt !== null &&
       Date.now() - Date.parse(this.boundHeartbeatAt) < ttlMs
     );

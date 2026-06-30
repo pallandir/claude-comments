@@ -30,26 +30,24 @@ interface Health {
   startedAt?: string;
   version?: number;
   lastPolledAt?: string | null;
-  expectedSession?: string | null;
-  boundSession?: string | null;
-  boundHeartbeatAt?: string | null;
   watching?: boolean;
   notices?: DeferralNotice[];
 }
 
-interface ServerInfo {
+interface ServerCandidate {
   port: number;
   root: string;
   startedAt: string;
   lastPolledAt: string | null;
-  expectedSession: string | null;
   watching: boolean;
   notices: DeferralNotice[];
   version: number | null;
 }
 
-// A page is "local" when it is served from this machine. Only then may the
-// extension reach the loopback ingest server; on a deployed site it must not.
+interface ServerInfo extends ServerCandidate {
+  token: string;
+}
+
 export function isLocalUrl(url: string): boolean {
   try {
     const host = new URL(url).hostname;
@@ -57,8 +55,7 @@ export function isLocalUrl(url: string): boolean {
       host === "localhost" ||
       host === "127.0.0.1" ||
       host === "[::1]" ||
-      host.endsWith(".localhost") ||
-      host.endsWith(".local")
+      host.endsWith(".localhost")
     );
   } catch {
     return false;
@@ -69,11 +66,20 @@ function api(port: number, path: string): string {
   return `http://127.0.0.1:${port}${path}`;
 }
 
-function postJson(port: number, path: string, body: unknown): Promise<Response> {
+function request(
+  method: string,
+  port: number,
+  path: string,
+  body?: unknown,
+  token?: string,
+): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (token) headers["X-Redline-Token"] = token;
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   return fetch(api(port, path), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 }
 
@@ -90,7 +96,7 @@ export async function getSessionId(): Promise<string> {
   const stored = await chrome.storage.local.get(SESSION_KEY);
   const existing = stored[SESSION_KEY] as string | undefined;
   if (existing) return existing;
-  const id = crypto.randomUUID().slice(0, 8);
+  const id = crypto.randomUUID();
   await chrome.storage.local.set({ [SESSION_KEY]: id });
   return id;
 }
@@ -119,9 +125,13 @@ export async function clearServerForUrl(url: string): Promise<void> {
   const server = await findServer();
   if (!server) return;
   try {
-    await fetch(api(server.port, `/comments?url=${encodeURIComponent(url)}`), {
-      method: "DELETE",
-    });
+    await request(
+      "DELETE",
+      server.port,
+      `/comments?url=${encodeURIComponent(url)}`,
+      undefined,
+      server.token,
+    );
   } catch {
     // server gone; local clear already happened
   }
@@ -132,7 +142,7 @@ export async function clearAll(): Promise<void> {
   const server = await findServer();
   if (!server) return;
   try {
-    await fetch(api(server.port, "/comments"), { method: "DELETE" });
+    await request("DELETE", server.port, "/comments?all=true", undefined, server.token);
   } catch {
     // server gone; local clear already happened
   }
@@ -143,7 +153,7 @@ export async function countAll(): Promise<number> {
   const server = await findServer();
   if (!server) return local;
   try {
-    const res = await fetch(api(server.port, "/comments"));
+    const res = await request("GET", server.port, "/comments", undefined, server.token);
     if (!res.ok) return local;
     const all = (await res.json()) as unknown[];
     return local + all.length;
@@ -161,7 +171,7 @@ export async function update(cid: string, text: string): Promise<void> {
   }
 }
 
-async function probe(port: number): Promise<ServerInfo | null> {
+async function probe(port: number): Promise<ServerCandidate | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
   try {
@@ -174,7 +184,6 @@ async function probe(port: number): Promise<ServerInfo | null> {
       root: body.root,
       startedAt: body.startedAt,
       lastPolledAt: body.lastPolledAt ?? null,
-      expectedSession: body.expectedSession ?? null,
       watching: body.watching ?? false,
       notices: body.notices ?? [],
       version: body.version ?? null,
@@ -186,29 +195,64 @@ async function probe(port: number): Promise<ServerInfo | null> {
   }
 }
 
-// Several redline servers can be alive at once (one per editor session, or a
-// stale one squatting a port). Probe them all and pick the most recently
-// started: that is the live session, never a leftover from a prior run.
-async function findServer(): Promise<ServerInfo | null> {
-  const live = (await Promise.all(PORTS.map(probe))).filter((r): r is ServerInfo => r !== null);
-  if (live.length === 0) return null;
-  return live.reduce((best, cur) => (cur.startedAt > best.startedAt ? cur : best));
+const enc = new TextEncoder();
+
+async function hmacHex(key: string, message: string): Promise<string> {
+  const k = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(key),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", k, enc.encode(message));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-async function publishSessionIfNeeded(server: ServerInfo, sessionId: string): Promise<void> {
-  if (server.expectedSession === sessionId) return;
+async function verifyServer(port: number, token: string): Promise<boolean> {
+  const nonce = crypto.randomUUID();
   try {
-    await postJson(server.port, "/session", { sessionId });
+    const res = await fetch(api(port, "/handshake"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nonce }),
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { hmac?: string };
+    if (!body.hmac || typeof body.hmac !== "string") return false;
+    const expected = await hmacHex(token, nonce);
+    return body.hmac === expected;
   } catch {
-    // best-effort; the extension will retry on the next poll
+    return false;
   }
+}
+
+// Probe all known ports and return the most recently started server that can
+// prove it knows the session token via HMAC challenge-response. A port-squatting
+// process cannot produce the correct HMAC without the token, which only reaches
+// the real server over the trusted MCP stdio channel (never over HTTP).
+async function findServer(): Promise<ServerInfo | null> {
+  const token = await getSessionId();
+  const candidates = (await Promise.all(PORTS.map(probe))).filter(
+    (r): r is ServerCandidate => r !== null,
+  );
+  if (candidates.length === 0) return null;
+
+  for (const candidate of candidates.sort((a, b) => b.startedAt.localeCompare(a.startedAt))) {
+    if (await verifyServer(candidate.port, token)) {
+      return { ...candidate, token };
+    }
+  }
+  return null;
 }
 
 export async function fetchServerComments(url: string): Promise<ServerComment[]> {
   const server = await findServer();
   if (!server) return [];
   try {
-    const res = await fetch(api(server.port, "/comments"));
+    const res = await request("GET", server.port, "/comments", undefined, server.token);
     if (!res.ok) return [];
     const all = (await res.json()) as ServerComment[];
     return all.filter((c) => c.url === url);
@@ -221,14 +265,13 @@ export async function dismissNotice(commentId: string): Promise<void> {
   const server = await findServer();
   if (!server) return;
   try {
-    await postJson(server.port, "/notices/dismiss", { commentId });
+    await request("POST", server.port, "/notices/dismiss", { commentId }, server.token);
   } catch {
     // server gone; toolbar will clear on next poll when notice is absent
   }
 }
 
-async function statusFrom(server: ServerInfo | null): Promise<QueueStatus> {
-  const queued = (await getQueue()).length;
+function statusFrom(server: ServerInfo | null, queued: number): QueueStatus {
   if (!server) {
     return {
       queued,
@@ -253,16 +296,21 @@ async function statusFrom(server: ServerInfo | null): Promise<QueueStatus> {
 
 export async function flush(): Promise<QueueStatus> {
   const server = await findServer();
-  if (!server) return statusFrom(null);
+  const items = await getQueue();
+  if (!server) return statusFrom(null, items.length);
 
   const sessionId = await getSessionId();
-  await publishSessionIfNeeded(server, sessionId);
-
   const posted = new Set<string>();
-  for (const item of await getQueue()) {
+  for (const item of items) {
     try {
       const { cid: _cid, queuedAt: _queuedAt, ...draft } = item;
-      const res = await postJson(server.port, "/comments", { ...draft, sessionId });
+      const res = await request(
+        "POST",
+        server.port,
+        "/comments",
+        { ...draft, sessionId },
+        server.token,
+      );
       if (res.ok) posted.add(item.cid);
     } catch {
       // keep the item queued for the next flush
@@ -273,27 +321,20 @@ export async function flush(): Promise<QueueStatus> {
   // posting must survive, so only drop the cids we actually delivered.
   await setQueue((await getQueue()).filter((item) => !posted.has(item.cid)));
 
-  // Re-probe to get fresh watching/notices state after publishing
   const fresh = await findServer();
-  return statusFrom(fresh);
+  return statusFrom(fresh, (await getQueue()).length);
 }
 
 export async function status(): Promise<QueueStatus> {
   const server = await findServer();
-  if (server) {
-    const sessionId = await getSessionId();
-    await publishSessionIfNeeded(server, sessionId);
-    const fresh = await findServer();
-    return statusFrom(fresh);
-  }
-  return statusFrom(null);
+  return statusFrom(server, (await getQueue()).length);
 }
 
 export async function reopenComment(id: string, note?: string): Promise<void> {
   const server = await findServer();
   if (!server) return;
   try {
-    await postJson(server.port, "/comments/reopen", { id, note });
+    await request("POST", server.port, "/comments/reopen", { id, note }, server.token);
   } catch {
     // best-effort
   }
@@ -304,7 +345,13 @@ export async function requestRating(url: string, screenshotDataUrl: string | nul
   if (!server) return;
   const sessionId = await getSessionId();
   try {
-    await postJson(server.port, "/ratings", { url, screenshotDataUrl, sessionId });
+    await request(
+      "POST",
+      server.port,
+      "/ratings",
+      { url, screenshotDataUrl, sessionId },
+      server.token,
+    );
   } catch {
     // best-effort; missing rating is non-fatal
   }
@@ -314,7 +361,13 @@ export async function fetchRating(url: string): Promise<PageRating | null> {
   const server = await findServer();
   if (!server) return null;
   try {
-    const res = await fetch(api(server.port, `/ratings?url=${encodeURIComponent(url)}`));
+    const res = await request(
+      "GET",
+      server.port,
+      `/ratings?url=${encodeURIComponent(url)}`,
+      undefined,
+      server.token,
+    );
     if (!res.ok) return null;
     const ratings = (await res.json()) as Array<{
       id: string;

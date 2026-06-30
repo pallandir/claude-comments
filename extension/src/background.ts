@@ -73,6 +73,7 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 });
 
 async function handle(message: Message, sender: chrome.runtime.MessageSender): Promise<Response> {
+  if (sender.id !== chrome.runtime.id) return { ok: false, error: "forbidden" };
   switch (message.type) {
     case "capture-region": {
       try {
@@ -85,11 +86,11 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     }
     case "save-request": {
       const item = await enqueue(message.draft);
-      const result = isLocalUrl(message.draft.url) ? await status() : offlineStatus();
+      const result = isLocalUrl(sender.tab?.url ?? "") ? await status() : offlineStatus();
       return { ok: true, status: result, cid: item.cid };
     }
     case "page-comments":
-      return { ok: true, pins: await pagePins(message.url) };
+      return { ok: true, pins: await pagePins(message.url, sender.tab?.url) };
     case "dismiss-notice": {
       if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true, status: offlineStatus() };
       await dismissNotice(message.commentId);
@@ -102,13 +103,13 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
       return { ok: true, status: await status() };
     case "clear-comments":
       await clearForUrl(message.url);
-      await clearServerForUrl(message.url);
+      if (isLocalUrl(sender.tab?.url ?? "")) await clearServerForUrl(message.url);
       return { ok: true, status: await status() };
     case "clear-all":
       await clearAll();
       return { ok: true, status: await status() };
     case "count-all":
-      return { ok: true, count: await countAll() };
+      return { ok: true, count: isLocalUrl(sender.tab?.url ?? "") ? await countAll() : 0 };
     case "update-comment":
       await update(message.cid, message.text);
       return { ok: true, status: await status() };
@@ -163,10 +164,10 @@ async function setActive(tabId: number, on: boolean): Promise<void> {
   await chrome.storage.session.set({ [ACTIVE_KEY]: map });
 }
 
-async function pagePins(url: string): Promise<PinModel[]> {
+async function pagePins(url: string, tabUrl?: string): Promise<PinModel[]> {
   const [queued, synced] = await Promise.all([
     listForUrl(url),
-    isLocalUrl(url) ? fetchServerComments(url) : Promise.resolve([]),
+    isLocalUrl(tabUrl ?? "") ? fetchServerComments(url) : Promise.resolve([]),
   ]);
   return [
     ...queued.map(

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
 import { Broker } from "./broker.js";
 import type { CommentStore } from "./store.js";
@@ -58,7 +59,21 @@ function setCors(res: ServerResponse, origin: string | undefined): void {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Redline-Token");
+}
+
+// Verify the bearer token on state-changing / data endpoints. Routes exempt from
+// this check: OPTIONS, GET /health, POST /handshake (those are the probe/auth
+// path itself and must be reachable before a token is established).
+function authorized(req: IncomingMessage, broker: Broker): boolean {
+  const header = req.headers["x-redline-token"];
+  const candidate = Array.isArray(header) ? header[0] : header;
+  if (!candidate) return false;
+  return broker.verifyToken(candidate);
+}
+
+export function hmacHex(key: string, message: string): string {
+  return createHmac("sha256", key).update(message).digest("hex");
 }
 
 async function handle(
@@ -82,7 +97,9 @@ async function handle(
     return;
   }
 
-  if (req.method === "GET" && req.url === "/health") {
+  const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+
+  if (req.method === "GET" && pathname === "/health") {
     const pendingRatings = (await store.listRatingRequests("pending")).length;
     json(res, 200, {
       ok: true,
@@ -92,9 +109,6 @@ async function handle(
       pid: broker.pid,
       version: broker.currentVersion,
       lastPolledAt: broker.lastPolledAt,
-      expectedSession: broker.expectedSession,
-      boundSession: broker.boundSession,
-      boundHeartbeatAt: broker.boundHeartbeat,
       watching: broker.isBoundAlive(BOUND_TTL_MS),
       notices: broker.pendingNotices,
       pendingRatings,
@@ -102,12 +116,42 @@ async function handle(
     return;
   }
 
-  if (req.method === "GET" && req.url?.startsWith("/state")) {
+  // HMAC challenge-response: the extension sends a random nonce, the server
+  // signs it with the bound token. A port-squatting process cannot forge this
+  // because it never learns the token (it is delivered only over MCP stdio).
+  if (req.method === "POST" && pathname === "/handshake") {
+    try {
+      const body = await readBody(req);
+      const parsed = JSON.parse(body) as { nonce?: string };
+      if (!parsed.nonce || typeof parsed.nonce !== "string") {
+        json(res, 400, { error: "nonce required" });
+        return;
+      }
+      const token = broker.token;
+      if (!token) {
+        json(res, 401, { error: "no session bound" });
+        return;
+      }
+      json(res, 200, { hmac: hmacHex(token, parsed.nonce) });
+    } catch (err) {
+      log((err as Error).message);
+      json(res, 400, { error: "bad request" });
+    }
+    return;
+  }
+
+  // All routes below this point require a valid bearer token.
+  if (!authorized(req, broker)) {
+    json(res, 401, { error: "unauthorized" });
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/state") {
     json(res, 200, await snapshot(store, broker));
     return;
   }
 
-  if (req.method === "GET" && req.url?.startsWith("/wait")) {
+  if (req.method === "GET" && pathname === "/wait") {
     const raw = query(req.url, "since");
     const since = raw === null ? broker.currentVersion : Number(raw);
     const base = Number.isFinite(since) ? since : broker.currentVersion;
@@ -116,24 +160,7 @@ async function handle(
     return;
   }
 
-  if (req.method === "POST" && req.url === "/session") {
-    try {
-      const body = await readBody(req);
-      const parsed = JSON.parse(body) as { sessionId?: string };
-      if (!parsed.sessionId || typeof parsed.sessionId !== "string") {
-        json(res, 400, { error: "sessionId required" });
-        return;
-      }
-      broker.publishSession(parsed.sessionId);
-      log(`session published: ${parsed.sessionId}`);
-      json(res, 200, { ok: true });
-    } catch (err) {
-      json(res, 400, { error: (err as Error).message });
-    }
-    return;
-  }
-
-  if (req.method === "POST" && req.url === "/notices/dismiss") {
+  if (req.method === "POST" && pathname === "/notices/dismiss") {
     try {
       const body = await readBody(req);
       const parsed = JSON.parse(body) as { commentId?: string };
@@ -144,40 +171,47 @@ async function handle(
       broker.dismissNotice(parsed.commentId);
       json(res, 200, { ok: true });
     } catch (err) {
-      json(res, 400, { error: (err as Error).message });
+      log((err as Error).message);
+      json(res, 400, { error: "bad request" });
     }
     return;
   }
 
-  if (req.method === "GET" && req.url?.startsWith("/comments")) {
+  if (req.method === "GET" && pathname === "/comments") {
     json(res, 200, await store.list());
     return;
   }
 
-  if (req.method === "DELETE" && req.url?.startsWith("/comments")) {
-    const url = query(req.url, "url") ?? undefined;
-    const removed = await store.clear(url);
+  if (req.method === "DELETE" && pathname === "/comments") {
+    const url = query(req.url, "url");
+    const all = query(req.url, "all");
+    if (!url && all !== "true") {
+      json(res, 400, { error: "url or ?all=true required" });
+      return;
+    }
+    const removed = await store.clear(url ?? undefined);
     broker.bump();
     log(`cleared ${removed} comment(s)${url ? ` on ${url}` : ""}`);
     json(res, 200, { removed });
     return;
   }
 
-  if (req.method === "POST" && req.url === "/comments") {
+  if (req.method === "POST" && pathname === "/comments") {
     try {
       const body = await readBody(req);
       const incoming = parseIncoming(body);
-      const comment = await store.add(incoming);
+      const comment = await store.add(incoming, store.root);
       broker.bump();
       log(`ingested comment ${comment.id} on ${comment.metadata.page}`);
       json(res, 201, { id: comment.id, status: comment.status });
     } catch (err) {
-      json(res, 400, { error: (err as Error).message });
+      log((err as Error).message);
+      json(res, 400, { error: "bad request" });
     }
     return;
   }
 
-  if (req.method === "POST" && req.url === "/comments/reopen") {
+  if (req.method === "POST" && pathname === "/comments/reopen") {
     try {
       const body = await readBody(req);
       const parsed = JSON.parse(body) as { id?: string; note?: string };
@@ -193,20 +227,21 @@ async function handle(
       broker.bump();
       json(res, 200, { ok: true });
     } catch (err) {
-      json(res, 400, { error: (err as Error).message });
+      log((err as Error).message);
+      json(res, 400, { error: "bad request" });
     }
     return;
   }
 
-  if (req.method === "GET" && req.url?.startsWith("/ratings")) {
-    const url = query(req.url, "url") ?? undefined;
+  if (req.method === "GET" && pathname === "/ratings") {
+    const url = query(req.url, "url");
     const ratings = await store.listRatingRequests();
     const filtered = url ? ratings.filter((r) => r.url === url) : ratings;
     json(res, 200, filtered);
     return;
   }
 
-  if (req.method === "POST" && req.url === "/ratings") {
+  if (req.method === "POST" && pathname === "/ratings") {
     try {
       const body = await readBody(req);
       const incoming = parseRatingRequest(body);
@@ -219,7 +254,8 @@ async function handle(
       }
       json(res, 201, { id: entry.id, status: entry.status });
     } catch (err) {
-      json(res, 400, { error: (err as Error).message });
+      log((err as Error).message);
+      json(res, 400, { error: "bad request" });
     }
     return;
   }
@@ -232,7 +268,6 @@ async function snapshot(store: CommentStore, broker: Broker) {
     version: broker.currentVersion,
     lastPolledAt: broker.lastPolledAt,
     comments: await store.list(),
-    expectedSession: broker.expectedSession,
     watching: broker.isBoundAlive(BOUND_TTL_MS),
     notices: broker.pendingNotices,
   };
@@ -256,8 +291,8 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function query(url: string, key: string): string | null {
-  return new URL(url, "http://localhost").searchParams.get(key);
+function query(url: string | undefined, key: string): string | null {
+  return new URL(url ?? "", "http://localhost").searchParams.get(key);
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {

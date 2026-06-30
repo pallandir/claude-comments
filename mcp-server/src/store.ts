@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
   Comment,
   CommentStatus,
@@ -14,8 +14,22 @@ import type {
   RatingStatus,
 } from "./types.js";
 
+// Confine a source location's path to the project root so a crafted page cannot
+// steer the AI assistant toward arbitrary files outside the project.
+function confineSourcePath(
+  source: import("./types.js").SourceLocation | null,
+  root: string,
+): import("./types.js").SourceLocation | null {
+  if (!source) return null;
+  const normalized = isAbsolute(source.path) ? resolve(source.path) : resolve(root, source.path);
+  const rootWithSep = root.endsWith(sep) ? root : root + sep;
+  if (normalized !== root && !normalized.startsWith(rootWithSep)) return null;
+  return source;
+}
+
 const STORE_DIR = ".claude";
 const STORE_FILE = join(STORE_DIR, "design-comments.md");
+const STORE_JSON = join(STORE_DIR, "design-comments.json");
 const SHOTS_DIR = join(STORE_DIR, "design-shots");
 const DEFERRED_FILE = join(STORE_DIR, "redline-deferred.md");
 const RATINGS_FILE = join(STORE_DIR, "redline-ratings.json");
@@ -23,6 +37,7 @@ const RATINGS_FILE = join(STORE_DIR, "redline-ratings.json");
 export class CommentStore {
   private readonly storeRoot: string;
   private readonly storePath: string;
+  private readonly storeJsonPath: string;
   private readonly shotsPath: string;
   private readonly deferredPath: string;
   private readonly ratingsPath: string;
@@ -30,6 +45,7 @@ export class CommentStore {
   constructor(root: string) {
     this.storeRoot = root;
     this.storePath = join(root, STORE_FILE);
+    this.storeJsonPath = join(root, STORE_JSON);
     this.shotsPath = join(root, SHOTS_DIR);
     this.deferredPath = join(root, DEFERRED_FILE);
     this.ratingsPath = join(root, RATINGS_FILE);
@@ -48,12 +64,15 @@ export class CommentStore {
     return (await this.read()).find((c) => c.id === id);
   }
 
-  async add(incoming: IncomingComment): Promise<Comment> {
+  async add(incoming: IncomingComment, projectRoot?: string): Promise<Comment> {
     const comments = await this.read();
     const id = `c${comments.length + 1}-${randomUUID().slice(0, 6)}`;
     const screenshot = incoming.screenshotDataUrl
       ? await this.saveShot(id, incoming.screenshotDataUrl)
       : null;
+
+    const root = projectRoot ?? this.storeRoot;
+    const safeSource = confineSourcePath(incoming.source ?? null, root);
 
     const comment: Comment = {
       id,
@@ -64,7 +83,7 @@ export class CommentStore {
       url: incoming.url,
       metadata: incoming.metadata,
       status: "open",
-      source: incoming.source ?? null,
+      source: safeSource,
       screenshot,
       sessionId: incoming.sessionId,
       planFirst: incoming.planFirst ?? false,
@@ -204,11 +223,22 @@ export class CommentStore {
   }
 
   private async read(): Promise<Comment[]> {
-    const raw = await readTextFile(this.storePath);
-    return raw === null ? [] : parse(raw);
+    const jsonRaw = await readTextFile(this.storeJsonPath);
+    if (jsonRaw !== null) {
+      try {
+        return JSON.parse(jsonRaw) as Comment[];
+      } catch {
+        return [];
+      }
+    }
+    // One-time migration: read the legacy markdown file and let the next write
+    // promote data to the JSON sidecar.
+    const mdRaw = await readTextFile(this.storePath);
+    return mdRaw === null ? [] : parse(mdRaw);
   }
 
   private async write(comments: Comment[]): Promise<void> {
+    await writeFileAtomic(this.storeJsonPath, JSON.stringify(comments, null, 2));
     await writeFileAtomic(this.storePath, serialize(comments));
   }
 }

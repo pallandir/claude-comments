@@ -1,20 +1,25 @@
 import type { SourceLocation } from "../types.js";
+import { sanitizeSourcePath } from "./sanitize.js";
 
 type Reader = (el: Element) => SourceLocation | null;
 
 const reactInspector: Reader = (el) => {
-  const path = el.getAttribute("data-inspector-relative-path");
+  const raw = el.getAttribute("data-inspector-relative-path");
   const line = el.getAttribute("data-inspector-line");
   const column = el.getAttribute("data-inspector-column");
-  if (!path || !line) return null;
+  if (!raw || !line) return null;
+  const path = sanitizeSourcePath(raw);
+  if (!path) return null;
   return { path, line: Number(line), column: Number(column ?? 0), via: "react-dev-inspector" };
 };
 
 const vueInspector: Reader = (el) => {
   const raw = el.getAttribute("data-v-inspector");
   if (!raw) return null;
-  const [path, line, column] = raw.split(":");
-  if (!path || !line) return null;
+  const [rawPath, line, column] = raw.split(":");
+  if (!rawPath || !line) return null;
+  const path = sanitizeSourcePath(rawPath);
+  if (!path) return null;
   return {
     path,
     line: Number(line),
@@ -28,8 +33,10 @@ const svelteInspector: Reader = (el) => {
   if (!raw) return null;
   const match = raw.match(/(.+):(\d+):(\d+)/);
   if (!match) return null;
+  const path = sanitizeSourcePath(match[1]);
+  if (!path) return null;
   return {
-    path: match[1],
+    path,
     line: Number(match[2]),
     column: Number(match[3]),
     via: "svelte-inspector",
