@@ -288,13 +288,13 @@ function setupPanel(
   const projectHint = reachable
     ? root
       ? short(root)
-      : "Waiting for Claude…"
+      : "Waiting for your assistant…"
     : "Start Redline in your editor.";
 
   const tip = document.createElement("div");
   tip.className = "cc-setup-hint";
   tip.textContent =
-    "Tip: start Claude in auto-accept mode (Shift+Tab at the prompt) so comments are applied without approval pauses.";
+    "Tip: run your AI assistant in auto-accept/edit mode so comments apply without approval pauses (Claude Code: Shift+Tab). See the README for the one-time allow-list setup.";
   wrap.append(watchRow(sessionId), setupRow(watching, "Project connected", projectHint), tip);
   return wrap;
 }
@@ -326,18 +326,18 @@ function watchRow(sessionId: string | null): HTMLElement {
   const body = document.createElement("div");
   const strong = document.createElement("div");
   strong.className = "cc-setup-label";
-  strong.textContent = "Pair with Claude";
+  strong.textContent = "Pair with your AI assistant";
 
   const cmdRow = document.createElement("div");
   cmdRow.className = "cc-setup-cmd cc-setup-id";
   const cmdCode = document.createElement("code");
-  cmdCode.textContent = sessionId ? `/redline ${sessionId}` : "loading…";
+  cmdCode.textContent = sessionId ? `/mcp__redline__watch ${sessionId}` : "loading…";
   const copy = document.createElement("button");
   copy.type = "button";
   copy.className = "cc-copy";
   copy.textContent = "Copy";
   copy.addEventListener("click", () => {
-    void navigator.clipboard?.writeText(sessionId ? `/redline ${sessionId}` : "");
+    void navigator.clipboard?.writeText(sessionId ? `/mcp__redline__watch ${sessionId}` : "");
     copy.textContent = "Copied";
     window.setTimeout(() => {
       copy.textContent = "Copy";
@@ -347,7 +347,7 @@ function watchRow(sessionId: string | null): HTMLElement {
 
   const sub = document.createElement("div");
   sub.className = "cc-setup-hint";
-  sub.textContent = "Paste into Claude to start.";
+  sub.textContent = "Paste into your assistant to start.";
   body.append(strong, cmdRow, sub);
   row.append(mark, body);
   return row;

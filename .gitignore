@@ -35,6 +35,9 @@ yarn-error.log*
 .vscode/
 *.swp
 
+# Redline comment store (local only, never committed; server writes .gitignore inside it too)
+.redline/
+
 # Claude / AI assistant files and directories
 CLAUDE.md
 CLAUDE.local.md

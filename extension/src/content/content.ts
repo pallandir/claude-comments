@@ -196,6 +196,7 @@ function init(): void {
           });
         },
         done,
+        openDrawer,
       );
     } else if (which === "color") {
       openColorPanel(
@@ -228,6 +229,13 @@ function init(): void {
   function toggleDrawer(): void {
     st.drawerOpen = !st.drawerOpen;
     drawer?.setOpen(st.drawerOpen, st.lastPins, drawerCtx());
+    render();
+  }
+
+  function openDrawer(): void {
+    if (st.drawerOpen) return;
+    st.drawerOpen = true;
+    drawer?.setOpen(true, st.lastPins, drawerCtx());
     render();
   }
 

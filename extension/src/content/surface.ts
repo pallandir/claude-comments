@@ -238,6 +238,7 @@ export class Surface {
       options: { planFirst: boolean; attachScreenshot: boolean },
     ) => Promise<void> | void,
     onCancel?: () => void,
+    onType?: () => void,
   ): void {
     this.mount();
     this.closeComposer();
@@ -257,7 +258,7 @@ export class Surface {
     head.textContent = "Add comment";
 
     const textarea = document.createElement("textarea");
-    textarea.placeholder = "What should Claude change here?";
+    textarea.placeholder = "What should your AI assistant change here?";
 
     const toggleRow = document.createElement("div");
     toggleRow.className = "cc-toggle-row";
@@ -333,6 +334,15 @@ export class Surface {
         void submit();
       }
     });
+
+    if (onType) {
+      let typed = false;
+      textarea.addEventListener("input", () => {
+        if (typed) return;
+        typed = true;
+        onType();
+      });
+    }
 
     actions.append(hint, cancel, save);
     panel.append(head, textarea, toggleRow, actions);

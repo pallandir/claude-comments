@@ -44,7 +44,7 @@ export interface DeferredComment {
   operationType: OperationType;
   comment: string;
   reason: string;
-  flaggedBy: "user" | "claude";
+  flaggedBy: "user" | "assistant";
 }
 
 export interface DeferralNotice {

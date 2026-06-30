@@ -90,6 +90,7 @@
   color: #ffffff;
   font: 500 11px / 1 system-ui, sans-serif;
   animation: cc-pop 0.32s var(--cc-ease);
+  transition: transform 0.14s var(--cc-ease);
 }
 
 .cc-pin > span {
@@ -117,7 +118,7 @@
 
 .cc-pin-wrap--focus .cc-pin {
   box-shadow: 0 0 0 3px var(--cc-accent), 0 2px 8px rgba(13, 153, 255, 0.35);
-  transform: scale(1.15);
+  transform: rotate(-45deg) scale(1.22);
 }
 
 .cc-pin-wrap--wontfix .cc-pin {

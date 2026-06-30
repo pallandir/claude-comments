@@ -27,7 +27,7 @@
     "root": {
       "type": "directory",
       "title": "Project directory",
-      "description": "The repository to write comments into (.claude/design-comments.md and screenshots land here).",
+      "description": "The repository to write comments into (.redline/design-comments.json and screenshots land here; never committed).",
       "required": true
     },
     "port": {
@@ -40,15 +40,21 @@
       "required": false
     }
   },
+  "prompts": [
+    {
+      "name": "watch",
+      "description": "Start Redline watch mode — bind a browser session and implement UI comments as they arrive."
+    }
+  ],
   "tools": [
     { "name": "list_comments", "description": "List UI comments, optionally filtered by status." },
     {
-      "name": "get_comment",
-      "description": "Get one comment with its source hint and screenshot path."
-    },
-    {
       "name": "resolve_comment",
       "description": "Set a comment's status to open, resolved, or wontfix."
+    },
+    {
+      "name": "resolve_comments",
+      "description": "Resolve or wontfix multiple comments in one call."
     },
     { "name": "clear_resolved", "description": "Remove every comment that is not open." },
     {
@@ -57,14 +63,22 @@
     },
     {
       "name": "bind_session",
-      "description": "Pair with the session id shown in the browser toolbar."
+      "description": "Pair with the session id shown in the browser toolbar. Returns storeRoot, commentsPath, and watchProtocol."
     },
     { "name": "unbind_session", "description": "Release session ownership when watch mode stops." },
     {
       "name": "defer_comment",
       "description": "Park a comment for later planning; notifies the browser toolbar."
     },
-    { "name": "list_deferred", "description": "List comments that were deferred for planning." }
+    { "name": "list_deferred", "description": "List comments that were deferred for planning." },
+    {
+      "name": "list_rating_requests",
+      "description": "List page rating requests (pending or scored)."
+    },
+    {
+      "name": "submit_rating",
+      "description": "Submit Awwwards-style UI/UX rating using the /redline-design-score skill; falls back to own judgment when the skill is unavailable."
+    }
   ],
   "compatibility": {
     "runtimes": {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
   Comment,
@@ -27,12 +27,18 @@ function confineSourcePath(
   return source;
 }
 
-const STORE_DIR = ".claude";
+const STORE_DIR = ".redline";
 const STORE_FILE = join(STORE_DIR, "design-comments.md");
 const STORE_JSON = join(STORE_DIR, "design-comments.json");
 const SHOTS_DIR = join(STORE_DIR, "design-shots");
 const DEFERRED_FILE = join(STORE_DIR, "redline-deferred.md");
 const RATINGS_FILE = join(STORE_DIR, "redline-ratings.json");
+
+const LEGACY_DIR = ".claude";
+const LEGACY_JSON = join(LEGACY_DIR, "design-comments.json");
+const LEGACY_MD = join(LEGACY_DIR, "design-comments.md");
+const LEGACY_DEFERRED = join(LEGACY_DIR, "redline-deferred.md");
+const LEGACY_RATINGS = join(LEGACY_DIR, "redline-ratings.json");
 
 export class CommentStore {
   private readonly storeRoot: string;
@@ -41,10 +47,13 @@ export class CommentStore {
   private readonly shotsPath: string;
   private readonly deferredPath: string;
   private readonly ratingsPath: string;
+  private readonly storeDir: string;
   private writeQueue: Promise<void> = Promise.resolve();
+  private storeDirInitialized = false;
 
   constructor(root: string) {
     this.storeRoot = root;
+    this.storeDir = join(root, STORE_DIR);
     this.storePath = join(root, STORE_FILE);
     this.storeJsonPath = join(root, STORE_JSON);
     this.shotsPath = join(root, SHOTS_DIR);
@@ -54,6 +63,22 @@ export class CommentStore {
 
   get root(): string {
     return this.storeRoot;
+  }
+
+  get commentsPath(): string {
+    return this.storeJsonPath;
+  }
+
+  private async initStoreDir(): Promise<void> {
+    if (this.storeDirInitialized) return;
+    this.storeDirInitialized = true;
+    await mkdir(this.storeDir, { recursive: true });
+    const gitignore = join(this.storeDir, ".gitignore");
+    try {
+      await access(gitignore);
+    } catch {
+      await writeFile(gitignore, "*\n", "utf8");
+    }
   }
 
   async list(status?: CommentStatus): Promise<Comment[]> {
@@ -137,13 +162,15 @@ export class CommentStore {
 
   async listDeferred(): Promise<DeferredComment[]> {
     const raw = await readTextFile(this.deferredPath);
-    return raw === null ? [] : parseDeferred(raw);
+    if (raw !== null) return parseDeferred(raw);
+    const legacyRaw = await readTextFile(join(this.storeRoot, LEGACY_DEFERRED));
+    return legacyRaw === null ? [] : parseDeferred(legacyRaw);
   }
 
   async addDeferred(
     origin: Comment,
     reason: string,
-    flaggedBy: "user" | "claude",
+    flaggedBy: "user" | "assistant",
   ): Promise<DeferredComment> {
     return this.enqueue(async () => {
       const existing = await this.listDeferred();
@@ -215,9 +242,17 @@ export class CommentStore {
 
   private async readRatings(): Promise<RatingRequest[]> {
     const raw = await readTextFile(this.ratingsPath);
-    if (!raw) return [];
+    if (raw) {
+      try {
+        return JSON.parse(raw) as RatingRequest[];
+      } catch {
+        return [];
+      }
+    }
+    const legacyRaw = await readTextFile(join(this.storeRoot, LEGACY_RATINGS));
+    if (!legacyRaw) return [];
     try {
-      return JSON.parse(raw) as RatingRequest[];
+      return JSON.parse(legacyRaw) as RatingRequest[];
     } catch {
       return [];
     }
@@ -237,6 +272,7 @@ export class CommentStore {
   }
 
   private async saveShot(id: string, dataUrl: string): Promise<string> {
+    await this.initStoreDir();
     await mkdir(this.shotsPath, { recursive: true });
     const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
     const file = join(this.shotsPath, `${id}.png`);
@@ -253,13 +289,23 @@ export class CommentStore {
         return [];
       }
     }
-    // One-time migration: read the legacy markdown file and let the next write
-    // promote data to the JSON sidecar.
     const mdRaw = await readTextFile(this.storePath);
-    return mdRaw === null ? [] : parse(mdRaw);
+    if (mdRaw !== null) return parse(mdRaw);
+    // Legacy .claude/ store: migrate on next write.
+    const legacyJson = await readTextFile(join(this.storeRoot, LEGACY_JSON));
+    if (legacyJson !== null) {
+      try {
+        return JSON.parse(legacyJson) as Comment[];
+      } catch {
+        return [];
+      }
+    }
+    const legacyMd = await readTextFile(join(this.storeRoot, LEGACY_MD));
+    return legacyMd === null ? [] : parse(legacyMd);
   }
 
   private async write(comments: Comment[]): Promise<void> {
+    await this.initStoreDir();
     await writeFileAtomic(this.storeJsonPath, JSON.stringify(comments, null, 2));
     await writeFileAtomic(this.storePath, serialize(comments));
   }
@@ -488,7 +534,7 @@ function parseDeferred(raw: string): DeferredComment[] {
       operationType: (current.operationType ?? "comment") as OperationType,
       comment: current.comment ?? "",
       reason: current.kv.reason ?? "",
-      flaggedBy: (current.kv.flaggedby as "user" | "claude") ?? "claude",
+      flaggedBy: (current.kv.flaggedby === "user" ? "user" : "assistant") as "user" | "assistant",
     });
   };
 
