@@ -24,24 +24,13 @@ import type { SourceLocation } from "./types.js";
 
 const ACTIVE_KEY = "cc-active";
 
+const BADGE_COLOR = "#009efa"; // Chrome badge API requires a hex string, cannot use a CSS var
+
 chrome.runtime.onInstalled.addListener(() => {
-  void chrome.action.setBadgeBackgroundColor({ color: "#d97757" });
+  void chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 });
 
-chrome.action.onClicked.addListener(async (tab) => {
-  if (tab.id === undefined) return;
-  const next = !(await isActive(tab.id));
-
-  if (next && !(await injectOverlay(tab.id))) return;
-
-  await setActive(tab.id, next);
-  await chrome.action.setBadgeText({ tabId: tab.id, text: next ? "ON" : "" });
-  chrome.tabs
-    .sendMessage(tab.id, { type: "set-active", on: next } satisfies Message)
-    .catch(() => {});
-});
-
-// The overlay is injected only here, into the one tab the user just clicked, under
+// The overlay is injected only here, into the one tab the user just activated, under
 // the activeTab grant. The content script guards against re-injection, so toggling
 // off then on without a reload is safe. Restricted pages (chrome://, the Web
 // Store, view-source) reject injection; we report that and stay off.
@@ -53,6 +42,13 @@ async function injectOverlay(tabId: number): Promise<boolean> {
     await chrome.action.setBadgeText({ tabId, text: "n/a" });
     return false;
   }
+}
+
+async function setOverlay(tabId: number, on: boolean): Promise<void> {
+  if (on && !(await injectOverlay(tabId))) return;
+  await setActive(tabId, on);
+  await chrome.action.setBadgeText({ tabId, text: on ? "ON" : "" });
+  chrome.tabs.sendMessage(tabId, { type: "set-active", on } satisfies Message).catch(() => {});
 }
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -75,6 +71,21 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 async function handle(message: Message, sender: chrome.runtime.MessageSender): Promise<Response> {
   if (sender.id !== chrome.runtime.id) return { ok: false, error: "forbidden" };
   switch (message.type) {
+    case "sync-active": {
+      const id = message.tabId ?? sender.tab?.id;
+      return { ok: true, active: id !== undefined ? await isActive(id) : false };
+    }
+    case "set-overlay": {
+      await setOverlay(message.tabId, message.on);
+      return { ok: true };
+    }
+    case "tab-status": {
+      const local = isLocalUrl(message.url);
+      if (!local) return { ok: true, status: offlineStatus() };
+      const st = await status();
+      const rating = await fetchRating(message.url);
+      return { ok: true, status: { ...st, sessionId: await getSessionToken(), rating } };
+    }
     case "capture-region": {
       try {
         const dataUrl = await captureRegion(sender.tab?.windowId, message.rect, message.dpr);

@@ -128,7 +128,7 @@ export class Toolbar {
     const status = state.status;
     const reachable = Boolean(status?.serverReachable);
     const watching = Boolean(status?.watching);
-    this.sendBtn.disabled = !reachable || (status?.queued ?? 0) === 0;
+    this.sendBtn.disabled = !reachable || !watching || !status || status.queued === 0;
 
     this.handoffBtn.classList.toggle("cc-action--primary", !reachable);
 
@@ -331,7 +331,7 @@ function watchRow(sessionId: string | null): HTMLElement {
   const cmdRow = document.createElement("div");
   cmdRow.className = "cc-setup-cmd cc-setup-id";
   const cmdCode = document.createElement("code");
-  cmdCode.textContent = sessionId ? `/mcp__redline__watch ${sessionId}` : "loading…";
+  cmdCode.textContent = sessionId ? `/mcp__redline__watch ${shortId(sessionId)}` : "loading…";
   const copy = document.createElement("button");
   copy.type = "button";
   copy.className = "cc-copy";
@@ -351,6 +351,10 @@ function watchRow(sessionId: string | null): HTMLElement {
   body.append(strong, cmdRow, sub);
   row.append(mark, body);
   return row;
+}
+
+function shortId(id: string): string {
+  return id.split("-")[0] ?? id;
 }
 
 function remotePanel(): HTMLElement {

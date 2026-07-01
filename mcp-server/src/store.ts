@@ -34,12 +34,6 @@ const SHOTS_DIR = join(STORE_DIR, "design-shots");
 const DEFERRED_FILE = join(STORE_DIR, "redline-deferred.md");
 const RATINGS_FILE = join(STORE_DIR, "redline-ratings.json");
 
-const LEGACY_DIR = ".claude";
-const LEGACY_JSON = join(LEGACY_DIR, "design-comments.json");
-const LEGACY_MD = join(LEGACY_DIR, "design-comments.md");
-const LEGACY_DEFERRED = join(LEGACY_DIR, "redline-deferred.md");
-const LEGACY_RATINGS = join(LEGACY_DIR, "redline-ratings.json");
-
 export class CommentStore {
   private readonly storeRoot: string;
   private readonly storePath: string;
@@ -162,15 +156,14 @@ export class CommentStore {
 
   async listDeferred(): Promise<DeferredComment[]> {
     const raw = await readTextFile(this.deferredPath);
-    if (raw !== null) return parseDeferred(raw);
-    const legacyRaw = await readTextFile(join(this.storeRoot, LEGACY_DEFERRED));
-    return legacyRaw === null ? [] : parseDeferred(legacyRaw);
+    return raw === null ? [] : parseDeferred(raw);
   }
 
   async addDeferred(
     origin: Comment,
     reason: string,
     flaggedBy: "user" | "assistant",
+    category: "needs-plan" | "feedback" = "needs-plan",
   ): Promise<DeferredComment> {
     return this.enqueue(async () => {
       const existing = await this.listDeferred();
@@ -184,6 +177,7 @@ export class CommentStore {
         comment: origin.comment,
         reason,
         flaggedBy,
+        category,
       };
       existing.push(entry);
       await writeFileAtomic(this.deferredPath, serializeDeferred(existing));
@@ -242,17 +236,9 @@ export class CommentStore {
 
   private async readRatings(): Promise<RatingRequest[]> {
     const raw = await readTextFile(this.ratingsPath);
-    if (raw) {
-      try {
-        return JSON.parse(raw) as RatingRequest[];
-      } catch {
-        return [];
-      }
-    }
-    const legacyRaw = await readTextFile(join(this.storeRoot, LEGACY_RATINGS));
-    if (!legacyRaw) return [];
+    if (!raw) return [];
     try {
-      return JSON.parse(legacyRaw) as RatingRequest[];
+      return JSON.parse(raw) as RatingRequest[];
     } catch {
       return [];
     }
@@ -290,18 +276,7 @@ export class CommentStore {
       }
     }
     const mdRaw = await readTextFile(this.storePath);
-    if (mdRaw !== null) return parse(mdRaw);
-    // Legacy .claude/ store: migrate on next write.
-    const legacyJson = await readTextFile(join(this.storeRoot, LEGACY_JSON));
-    if (legacyJson !== null) {
-      try {
-        return JSON.parse(legacyJson) as Comment[];
-      } catch {
-        return [];
-      }
-    }
-    const legacyMd = await readTextFile(join(this.storeRoot, LEGACY_MD));
-    return legacyMd === null ? [] : parse(legacyMd);
+    return mdRaw === null ? [] : parse(mdRaw);
   }
 
   private async write(comments: Comment[]): Promise<void> {
@@ -512,6 +487,7 @@ function serializeDeferred(entries: DeferredComment[]): string {
       "",
       `- reason: ${d.reason}`,
       `- flaggedby: ${d.flaggedBy}`,
+      `- category: ${d.category}`,
       `- created: ${d.createdAt}`,
     ];
     return lines.join("\n");
@@ -535,6 +511,9 @@ function parseDeferred(raw: string): DeferredComment[] {
       comment: current.comment ?? "",
       reason: current.kv.reason ?? "",
       flaggedBy: (current.kv.flaggedby === "user" ? "user" : "assistant") as "user" | "assistant",
+      category: (current.kv.category === "feedback" ? "feedback" : "needs-plan") as
+        | "needs-plan"
+        | "feedback",
     });
   };
 

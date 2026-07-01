@@ -45,6 +45,7 @@ export interface DeferredComment {
   comment: string;
   reason: string;
   flaggedBy: "user" | "assistant";
+  category: "needs-plan" | "feedback";
 }
 
 export interface DeferralNotice {
@@ -68,12 +69,20 @@ export interface IncomingComment {
 
 export type RatingStatus = "pending" | "scored";
 
+export interface RatingSection {
+  key: "typography" | "composition" | "motion" | "color" | "details";
+  label: string;
+  score: number;
+  advice: string;
+}
+
 export interface RatingResult {
   score: number;
   ui: number;
   ux: number;
   coherence: number;
   notes: string;
+  sections: RatingSection[];
 }
 
 export interface IncomingRatingRequest {

@@ -68,7 +68,7 @@ flowchart LR
     A["Browser extension\n(Chromium MV3)"]
     B["MCP server\n(127.0.0.1:7474)"]
     C["Comment store\n(.claude/)"]
-    D["/redline skill\nwatch loop"]
+    D["/mcp__redline__watch\nwatch loop"]
     E["Sub-agent\nedits source"]
 
     A -- "POST /comments\n(loopback only)" --> B
@@ -82,8 +82,8 @@ The extension activates per-tab when you click its toolbar icon. Each saved item
 carries a stable selector, visible text, computed styles, a cropped screenshot,
 and, when available, a precise `file:line:column` from a framework inspector
 plugin. On a `localhost` dev server the extension sends those comments directly
-to the MCP server running in your project. In Claude Code, you paste the session
-id from the toolbar and the `/redline` skill binds the session, watches for new
+to the MCP server running in your project. In Claude Code, you paste the watch
+command from the toolbar and the MCP server binds the session, watches for new
 batches, and dispatches a sub-agent to implement each one with no approval step.
 Comments that need deeper thought are parked for later; a notice appears in the
 browser toolbar.
@@ -210,8 +210,9 @@ outside the plugin.
    On a remote preview there is no local project, so use **Handoff** to download
    a Markdown report for any assistant.
 
-5. **Copy the session id** from the toolbar (the button copies the full
-   `/redline <id>` string). Paste it into Claude Code. The `/redline` skill
+5. **Copy the watch command** from the toolbar or popup (the Copy button writes
+   the full `/mcp__redline__watch <id>` command; the display shows only the
+   short id for readability). Paste it into Claude Code. The MCP `watch` prompt
    binds the session and starts watching: each time you send a batch it
    implements the comments directly via a sub-agent, then marks them resolved.
    Comments that need more thought (new dependencies, cross-cutting changes, or

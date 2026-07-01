@@ -70,6 +70,10 @@ function init(): void {
     if (message.type === "set-active") setActive(message.on);
   });
 
+  void send({ type: "sync-active" }).then((res) => {
+    if (res.ok && res.active) setActive(true);
+  });
+
   function setActive(on: boolean): void {
     if (on === st.active) return;
     st.active = on;
@@ -89,6 +93,7 @@ function init(): void {
         onClose: toggleDrawer,
         onRevert: (key) => void handleRevert(key),
         onHoverComment: (key) => surface.focusPin(key),
+        onReRequestRating: () => void publishPageRating(),
       });
       void refresh();
       startPolling();
@@ -97,7 +102,11 @@ function init(): void {
       surface.closeActionMenu();
       surface.setSelection(null);
       surface.highlightHover(null);
-      surface.setPins([], () => {});
+      surface.setPins(
+        [],
+        () => {},
+        () => {},
+      );
       toolbar?.destroy();
       drawer?.destroy();
       toolbar = null;
@@ -196,7 +205,6 @@ function init(): void {
           });
         },
         done,
-        openDrawer,
       );
     } else if (which === "color") {
       openColorPanel(
@@ -229,13 +237,6 @@ function init(): void {
   function toggleDrawer(): void {
     st.drawerOpen = !st.drawerOpen;
     drawer?.setOpen(st.drawerOpen, st.lastPins, drawerCtx());
-    render();
-  }
-
-  function openDrawer(): void {
-    if (st.drawerOpen) return;
-    st.drawerOpen = true;
-    drawer?.setOpen(true, st.lastPins, drawerCtx());
     render();
   }
 
@@ -328,6 +329,7 @@ function init(): void {
   }
 
   async function handleSend(): Promise<void> {
+    if (!st.lastStatus?.watching) return;
     await send({ type: "flush" });
     await refresh();
   }
@@ -386,7 +388,11 @@ function init(): void {
     const nowWatching = Boolean(st.lastStatus?.watching);
     if (nowWatching && !st.lastWatching && !st.lastRating) void publishPageRating();
     st.lastWatching = nowWatching;
-    surface.setPins(st.lastPins, (key) => void removePin(key));
+    surface.setPins(
+      st.lastPins,
+      (key) => void removePin(key),
+      (key, text) => void editComment(key, text),
+    );
     render();
   }
 
@@ -401,7 +407,7 @@ function init(): void {
           STYLE_ALLOWLIST.has(pin.operation.property)
         ) {
           el.style.setProperty(pin.operation.property, pin.operation.from);
-        } else if (pin.kind === "text") {
+        } else if (pin.kind === "text" && el.children.length === 0) {
           el.textContent = pin.operation.from;
         }
       }

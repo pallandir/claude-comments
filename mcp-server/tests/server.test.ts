@@ -232,20 +232,58 @@ test("submit_rating scores a pending rating request", async () => {
     screenshotDataUrl: null,
     sessionId: "s1",
   });
+  const sections = [
+    { key: "typography", label: "Typography", score: 80, advice: "Increase type scale contrast." },
+    { key: "composition", label: "Composition", score: 75, advice: "Introduce more asymmetry." },
+    {
+      key: "motion",
+      label: "Motion & Interaction",
+      score: 70,
+      advice: "Add scroll-reveal animations.",
+    },
+    {
+      key: "color",
+      label: "Color & Atmosphere",
+      score: 78,
+      advice: "Own the palette more boldly.",
+    },
+    {
+      key: "details",
+      label: "Details & Craft",
+      score: 72,
+      advice: "Refine hover states throughout.",
+    },
+  ];
   const result = await client.callTool({
     name: "submit_rating",
-    arguments: { id: req.id, score: 75, ui: 80, ux: 70, coherence: 78, notes: "Good overall" },
+    arguments: {
+      id: req.id,
+      score: 75,
+      ui: 80,
+      ux: 70,
+      coherence: 78,
+      notes: "Good overall",
+      sections,
+    },
   });
   assert.ok(text(result).includes("75"));
   const after = await store.getRatingRequest(req.id);
   assert.equal(after?.status, "scored");
   assert.equal(after?.result?.score, 75);
+  assert.equal(after?.result?.sections?.length, 5);
 });
 
 test("submit_rating returns not-found for unknown id", async () => {
+  const sections = [
+    { key: "typography", label: "Typography", score: 50, advice: "n/a" },
+    { key: "composition", label: "Composition", score: 50, advice: "n/a" },
+    { key: "motion", label: "Motion & Interaction", score: 50, advice: "n/a" },
+    { key: "color", label: "Color & Atmosphere", score: 50, advice: "n/a" },
+    { key: "details", label: "Details & Craft", score: 50, advice: "n/a" },
+  ];
   const result = await client.callTool({
     name: "submit_rating",
-    arguments: { id: "no-such", score: 50, ui: 50, ux: 50, coherence: 50, notes: "n/a" },
+    arguments: { id: "no-such", score: 50, ui: 50, ux: 50, coherence: 50, notes: "n/a", sections },
   });
   assert.ok(text(result).includes("no-such"));
 });

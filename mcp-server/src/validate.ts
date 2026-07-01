@@ -74,6 +74,15 @@ export function parseRatingRequest(raw: string): IncomingRatingRequest {
   return incomingRatingRequestSchema.parse(JSON.parse(raw)) as IncomingRatingRequest;
 }
 
+const ratingSectionSchema = z
+  .object({
+    key: z.enum(["typography", "composition", "motion", "color", "details"]),
+    label: z.string().max(MAX_SHORT),
+    score: z.number().int().min(0).max(100),
+    advice: z.string().max(MAX_TEXT),
+  })
+  .strict();
+
 export const ratingResultSchema = z
   .object({
     score: z.number().int().min(0).max(100),
@@ -81,5 +90,6 @@ export const ratingResultSchema = z
     ux: z.number().int().min(0).max(100),
     coherence: z.number().int().min(0).max(100),
     notes: z.string().max(MAX_TEXT),
+    sections: z.array(ratingSectionSchema).max(5),
   })
   .strict();

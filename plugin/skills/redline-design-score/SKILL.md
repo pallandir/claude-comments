@@ -14,7 +14,9 @@ Evaluate a page screenshot using an Awwwards-inspired rubric and produce Redline
 
 ## When to use
 
-When `list_rating_requests` returns a pending rating request, load the screenshot at the path it reports, evaluate it against the rubric below, then call `submit_rating`.
+This skill is designed to run inside a **disposable sub-agent** spawned by the Redline watch-mode session. The parent session delegates each pending rating to a fresh sub-agent using the `ratingSubAgentPrompt` returned by `bind_session`, so scoring stays out of the main conversation. The sub-agent calls `list_rating_requests`, applies this rubric, calls `submit_rating`, then exits.
+
+If invoked directly (not via a sub-agent), apply the same procedure: when `list_rating_requests` returns a pending rating request, load the screenshot at the path it reports, evaluate it against the rubric below, then call `submit_rating`.
 
 ## Sub-dimension rubric (each scored 0–100)
 
@@ -83,4 +85,10 @@ score     = round((ui + ux + coherence) / 3)
 3. Score each sub-dimension 0–100 using the rubric above.
 4. Compute ui, ux, and coherence from the mapping formulas.
 5. Write one sentence of notes identifying the page's strongest quality or biggest gap.
-6. Call `submit_rating({ id, score, ui, ux, coherence, notes })`.
+6. Write one or two sentences of actionable advice per sub-dimension — what the designer should do to improve that specific dimension.
+7. Call `submit_rating` with all fields, including `sections` — one entry per sub-dimension in this order:
+   - `{ key: "typography", label: "Typography", score: <typography>, advice: "<...>" }`
+   - `{ key: "composition", label: "Composition", score: <composition>, advice: "<...>" }`
+   - `{ key: "motion", label: "Motion & Interaction", score: <motion>, advice: "<...>" }`
+   - `{ key: "color", label: "Color & Atmosphere", score: <color>, advice: "<...>" }`
+   - `{ key: "details", label: "Details & Craft", score: <details>, advice: "<...>" }`

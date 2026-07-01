@@ -27,6 +27,13 @@ export interface DeferralNotice {
   createdAt: string;
 }
 
+export interface PageRatingSection {
+  key: "typography" | "composition" | "motion" | "color" | "details";
+  label: string;
+  score: number;
+  advice: string;
+}
+
 export interface PageRating {
   id: string;
   status: "pending" | "scored";
@@ -36,11 +43,15 @@ export interface PageRating {
     ux: number;
     coherence: number;
     notes: string;
+    sections: PageRatingSection[];
   };
 }
 
 export type Message =
   | { type: "set-active"; on: boolean }
+  | { type: "sync-active"; tabId?: number }
+  | { type: "set-overlay"; tabId: number; on: boolean }
+  | { type: "tab-status"; tabId: number; url: string }
   | { type: "capture-region"; rect: Rect; dpr: number }
   | { type: "save-request"; draft: DraftRequest }
   | { type: "page-comments"; url: string }
@@ -77,5 +88,6 @@ export type Response =
       pins?: PinModel[];
       comments?: QueuedRequest[];
       count?: number;
+      active?: boolean;
     }
   | { ok: false; error: string };

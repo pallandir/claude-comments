@@ -28,7 +28,8 @@ export default defineManifest({
     type: "module",
   },
   action: {
-    default_title: "Redline, click to toggle on this page",
+    default_title: "Redline",
+    default_popup: "src/popup/popup.html",
     default_icon: {
       "16": "icon-16.png",
       "32": "icon-32.png",

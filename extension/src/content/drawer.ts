@@ -1,5 +1,5 @@
-import type { PageRating, PinModel } from "../messages.js";
-import { ICON_CLOSE, icon } from "./icons.js";
+import type { PageRating, PageRatingSection, PinModel } from "../messages.js";
+import { ICON_CLOSE, ICON_REFRESH, icon } from "./icons.js";
 import type { Surface } from "./surface.js";
 import type { Mode } from "./toolbar.js";
 
@@ -9,6 +9,7 @@ export interface DrawerHandlers {
   onClose: () => void;
   onRevert: (key: string) => void;
   onHoverComment: (key: string | null) => void;
+  onReRequestRating: () => void;
 }
 
 export interface DrawerContext {
@@ -31,6 +32,7 @@ export class Drawer {
   private editing: string | null = null;
   private rating: PageRating | null = null;
   private activeTab: "comments" | "history" = "comments";
+  private rankTab: "scores" | "advice" = "scores";
 
   constructor(surface: Surface, handlers: DrawerHandlers) {
     this.handlers = handlers;
@@ -103,41 +105,119 @@ export class Drawer {
     }
     this.rankEl.hidden = false;
 
+    const result = this.rating.status === "scored" ? this.rating.result : null;
+
     const head = document.createElement("div");
     head.className = "cc-rank-head";
     const label = document.createElement("span");
     label.className = "cc-rank-label";
-    label.textContent = "Website ranking";
+    label.textContent = "Design score";
     head.append(label);
-
-    const result = this.rating.status === "scored" ? this.rating.result : null;
     if (result) {
+      const scoreWrap = document.createElement("span");
       const score = document.createElement("span");
       score.className = "cc-rank-score";
       score.textContent = String(result.score);
       const denom = document.createElement("span");
       denom.className = "cc-rank-denom";
       denom.textContent = "/100";
+      const band = document.createElement("span");
+      band.className = "cc-rank-band";
+      band.textContent = scoreBand(result.score);
       score.append(denom);
-      head.append(score);
+      scoreWrap.append(score, band);
+      head.append(scoreWrap);
     }
+    const refreshBtn = document.createElement("button") as HTMLButtonElement;
+    refreshBtn.type = "button";
+    refreshBtn.className = "cc-rank-refresh";
+    refreshBtn.disabled = this.rating.status === "pending" || !this.ctx?.connected;
+    refreshBtn.append(icon(ICON_REFRESH, "cc-rank-refresh-icon"));
+    refreshBtn.addEventListener("click", () => this.handlers.onReRequestRating());
+    head.append(refreshBtn);
     this.rankEl.append(head);
 
-    const dims: Array<[string, number | null]> = result
-      ? [
-          ["UI", result.ui],
-          ["UX", result.ux],
-          ["Coherence", result.coherence],
-        ]
-      : [
-          ["UI", null],
-          ["UX", null],
-          ["Coherence", null],
-        ];
+    if (result) {
+      const derivation = document.createElement("div");
+      derivation.className = "cc-rank-derivation";
+      const caption = document.createElement("span");
+      caption.className = "cc-rank-derivation-caption";
+      caption.textContent = "avg of";
+      const dims = document.createElement("span");
+      dims.className = "cc-rank-derivation-dims";
+      dims.textContent = `UI ${result.ui} · UX ${result.ux} · Coherence ${result.coherence}`;
+      derivation.append(caption, dims);
+      this.rankEl.append(derivation);
 
-    for (const [name, value] of dims) {
-      this.rankEl.append(scoreBar(name, value));
+      const notes = document.createElement("div");
+      notes.className = "cc-rank-notes";
+      notes.textContent = `"${result.notes}"`;
+      this.rankEl.append(notes);
     }
+
+    const tabs = document.createElement("div");
+    tabs.className = "cc-rank-tabs";
+    const breakdownBtn = document.createElement("button");
+    breakdownBtn.type = "button";
+    breakdownBtn.className = `cc-rank-tab${this.rankTab === "scores" ? " cc-rank-tab--active" : ""}`;
+    breakdownBtn.textContent = "Breakdown";
+    breakdownBtn.addEventListener("click", () => {
+      this.rankTab = "scores";
+      this.renderRank();
+    });
+    const adviceBtn = document.createElement("button");
+    adviceBtn.type = "button";
+    adviceBtn.className = `cc-rank-tab${this.rankTab === "advice" ? " cc-rank-tab--active" : ""}`;
+    adviceBtn.textContent = "Advice";
+    adviceBtn.addEventListener("click", () => {
+      this.rankTab = "advice";
+      this.renderRank();
+    });
+    tabs.append(breakdownBtn, adviceBtn);
+    this.rankEl.append(tabs);
+
+    const body = document.createElement("div");
+    body.className = "cc-rank-body";
+
+    if (this.rankTab === "scores") {
+      if (!result) {
+        for (const lbl of ["Typography", "Composition", "Motion", "Color", "Details"]) {
+          body.append(scoreBar(lbl, null));
+        }
+      } else {
+        for (const s of result.sections) {
+          body.append(scoreBar(s.label, s.score));
+        }
+      }
+    } else {
+      if (!result) {
+        body.append(emptyState("Advice appears once the page is scored."));
+      } else {
+        const lead = document.createElement("p");
+        lead.className = "cc-rank-advice-lead";
+        lead.textContent = result.notes;
+        body.append(lead);
+        const withAdvice = result.sections.filter((s: PageRatingSection) => s.advice);
+        if (withAdvice.length === 0) {
+          body.append(emptyState("No per-section advice available."));
+        } else {
+          for (const s of withAdvice) {
+            const row = document.createElement("div");
+            row.className = "cc-rank-advice";
+            const lbl = document.createElement("span");
+            lbl.className = "cc-rank-advice-label";
+            lbl.textContent = s.label;
+            const txt = document.createElement("span");
+            txt.className = "cc-rank-advice-text";
+            txt.textContent = s.advice;
+            row.append(lbl, txt);
+            body.append(row);
+          }
+        }
+      }
+    }
+
+    this.rankEl.append(body);
   }
 
   private renderTabs(pins: PinModel[]): void {
@@ -284,6 +364,20 @@ export class Drawer {
     }
     return row;
   }
+}
+
+function scoreBand(score: number): string {
+  if (score >= 76) return "Exceptional";
+  if (score >= 51) return "Good";
+  if (score >= 26) return "Fair";
+  return "Needs work";
+}
+
+function emptyState(text: string): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "cc-rank-empty";
+  el.textContent = text;
+  return el;
 }
 
 function scoreBar(label: string, value: number | null): HTMLElement {

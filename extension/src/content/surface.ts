@@ -238,7 +238,6 @@ export class Surface {
       options: { planFirst: boolean; attachScreenshot: boolean },
     ) => Promise<void> | void,
     onCancel?: () => void,
-    onType?: () => void,
   ): void {
     this.mount();
     this.closeComposer();
@@ -335,15 +334,6 @@ export class Surface {
       }
     });
 
-    if (onType) {
-      let typed = false;
-      textarea.addEventListener("input", () => {
-        if (typed) return;
-        typed = true;
-        onType();
-      });
-    }
-
     actions.append(hint, cancel, save);
     panel.append(head, textarea, toggleRow, actions);
     this.composerHighlight = highlight;
@@ -354,7 +344,11 @@ export class Surface {
     textarea.focus();
   }
 
-  setPins(models: PinModel[], onRemove: (key: string) => void): void {
+  setPins(
+    models: PinModel[],
+    onRemove: (key: string) => void,
+    onEdit: (key: string, text: string) => void,
+  ): void {
     this.mount();
     for (const pin of this.pins) pin.el.remove();
 
@@ -364,25 +358,95 @@ export class Surface {
       const classes = ["cc-pin-wrap", `cc-pin-wrap--${model.status}`];
       if (model.status === "resolved") classes.push("cc-pin-wrap--hidden");
       wrap.className = classes.join(" ");
+
       const marker = document.createElement("div");
       marker.className = "cc-pin";
       const glyphEl = document.createElement("span");
       const g = glyph(model.kind);
       if (g) glyphEl.append(g);
       marker.append(glyphEl);
-      const tip = document.createElement("div");
-      tip.className = "cc-tip";
-      tip.textContent = model.text;
-      wrap.append(marker, tip);
+
+      const card = document.createElement("div");
+      card.className = "cc-pin-card";
+
+      const preview = document.createElement("div");
+      preview.className = "cc-pin-card-preview";
+      preview.textContent = model.text;
+      card.append(preview);
 
       if (model.removable) {
-        wrap.classList.add("cc-pin-wrap--removable");
-        wrap.title = "Click to remove";
-        wrap.addEventListener("click", (event) => {
+        const editSection = document.createElement("div");
+        editSection.className = "cc-pin-card-edit";
+        editSection.hidden = true;
+
+        const textarea = document.createElement("textarea");
+        textarea.className = "cc-drawer-edit";
+        textarea.value = model.text;
+
+        const btnRow = document.createElement("div");
+        btnRow.className = "cc-pin-card-actions";
+
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "cc-btn cc-btn--ghost";
+        delBtn.textContent = "Delete";
+
+        const saveBtn = document.createElement("button");
+        saveBtn.type = "button";
+        saveBtn.className = "cc-btn cc-btn--primary";
+        saveBtn.textContent = "Save";
+
+        btnRow.append(delBtn, saveBtn);
+        editSection.append(textarea, btnRow);
+        card.append(editSection);
+
+        const enterEdit = () => {
+          preview.hidden = true;
+          editSection.hidden = false;
+          wrap.classList.add("cc-pin-wrap--editing");
+          textarea.value = model.text;
+          textarea.focus();
+        };
+
+        const exitEdit = () => {
+          preview.hidden = false;
+          editSection.hidden = true;
+          wrap.classList.remove("cc-pin-wrap--editing");
+        };
+
+        marker.style.cursor = "pointer";
+        marker.addEventListener("click", (event) => {
           event.stopPropagation();
+          enterEdit();
+        });
+
+        saveBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const value = textarea.value.trim();
+          exitEdit();
+          if (value && value !== model.text) onEdit(model.key, value);
+        });
+
+        delBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          exitEdit();
           onRemove(model.key);
         });
+
+        const onDocClick = (event: Event) => {
+          if (!wrap.contains(event.target as Node)) exitEdit();
+        };
+        const onKey = (event: KeyboardEvent) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            exitEdit();
+          }
+        };
+        wrap.addEventListener("keydown", onKey);
+        document.addEventListener("click", onDocClick, true);
       }
+
+      wrap.append(marker, card);
       this.shadow.append(wrap);
       return { model, el: wrap, anchor: resolveXPath(model.operator) };
     });

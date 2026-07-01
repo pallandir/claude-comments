@@ -1,8 +1,8 @@
 import type { Operation } from "../types.js";
+import { ICON_RESET, icon } from "./icons.js";
 import type { Surface } from "./surface.js";
 
 const OVERLAY_MARGIN = 8;
-const TOOL_PANEL_WIDTH = 240;
 
 export function openColorPanel(
   surface: Surface,
@@ -33,7 +33,7 @@ export function openColorPanel(
   save.textContent = "Save";
   const close = document.createElement("button");
   close.type = "button";
-  close.className = "cc-btn cc-btn--secondary-danger";
+  close.className = "cc-btn cc-btn--secondary";
   close.textContent = "Cancel";
   actions.append(close, save);
   panel.append(actions);
@@ -83,8 +83,10 @@ export function openTextEditor(
   commit: (from: string, to: string) => void,
   cancel: () => void,
 ): void {
-  const original = el.textContent ?? "";
-  const from = original.trim();
+  const originalHtml = el.innerHTML;
+  const originalText = el.textContent ?? "";
+  const from = originalText.trim();
+  const isLeaf = el.children.length === 0;
 
   const hint = document.createElement("div");
   hint.className = "cc-tool-hint";
@@ -110,9 +112,10 @@ export function openTextEditor(
     cleanup();
     const to = (el.textContent ?? "").trim();
     if (saveIt && to && to !== from) {
+      if (!isLeaf) el.innerHTML = originalHtml;
       commit(from, to);
     } else {
-      el.textContent = original;
+      el.innerHTML = originalHtml;
       cancel();
     }
   };
@@ -145,21 +148,57 @@ function field(
   row.className = "cc-field";
   const span = document.createElement("span");
   span.textContent = label;
+
   const input = document.createElement("input");
   input.type = "color";
   input.value = hex;
-  input.addEventListener("input", () => onInput(input.value));
-  row.append(span, input);
+
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button";
+  resetBtn.className = "cc-field-reset";
+  resetBtn.title = "Reset to original";
+  resetBtn.disabled = true;
+  resetBtn.append(icon(ICON_RESET, "cc-field-reset-icon"));
+
+  const syncReset = () => {
+    resetBtn.disabled = input.value.toLowerCase() === hex.toLowerCase();
+  };
+
+  input.addEventListener("input", () => {
+    onInput(input.value);
+    syncReset();
+  });
+  resetBtn.addEventListener("click", () => {
+    input.value = hex;
+    onInput(hex);
+    syncReset();
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "cc-field-controls";
+  controls.append(input, resetBtn);
+  row.append(span, controls);
   panel.append(row);
   return input;
 }
 
 function positionNear(box: HTMLElement, el: Element): void {
   const rect = el.getBoundingClientRect();
-  const left = Math.min(rect.left, window.innerWidth - TOOL_PANEL_WIDTH);
-  const top = Math.min(rect.bottom + OVERLAY_MARGIN, window.innerHeight - 120);
-  box.style.left = `${Math.max(OVERLAY_MARGIN, left) + window.scrollX}px`;
-  box.style.top = `${Math.max(OVERLAY_MARGIN, top) + window.scrollY}px`;
+  const w = box.offsetWidth;
+  const h = box.offsetHeight;
+  const left = Math.min(
+    Math.max(rect.left, OVERLAY_MARGIN),
+    window.innerWidth - w - OVERLAY_MARGIN,
+  );
+  const belowTop = rect.bottom + OVERLAY_MARGIN;
+  const aboveTop = rect.top - h - OVERLAY_MARGIN;
+  let top =
+    belowTop + h > window.innerHeight - OVERLAY_MARGIN && aboveTop >= OVERLAY_MARGIN
+      ? aboveTop
+      : belowTop;
+  top = Math.min(Math.max(top, OVERLAY_MARGIN), window.innerHeight - h - OVERLAY_MARGIN);
+  box.style.left = `${left + window.scrollX}px`;
+  box.style.top = `${top + window.scrollY}px`;
 }
 
 function selectAll(el: Element): void {
