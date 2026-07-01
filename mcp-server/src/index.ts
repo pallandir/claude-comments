@@ -31,16 +31,28 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     if (closing) return;
     closing = true;
+    clearInterval(parentWatch);
     broker.unbindSession();
     await ingest.close();
     process.exit(0);
   };
+
+  // Claude Code spawns this server in its own process group, so a Ctrl+C in the
+  // TUI never reaches us as a signal and does not always close stdin. When the
+  // editor exits, the OS reparents us (ppid changes, becomes 1 on unix): detect
+  // that and release the binding, matching the clean-exit path.
+  const parentPid = process.ppid;
+  const parentWatch = setInterval(() => {
+    if (process.ppid !== parentPid) void shutdown();
+  }, 2000);
+  parentWatch.unref();
 
   transport.onclose = () => void shutdown();
   process.stdin.on("end", () => void shutdown());
   process.stdin.on("close", () => void shutdown());
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());
+  process.on("SIGHUP", () => void shutdown());
 
   await server.connect(transport);
 }

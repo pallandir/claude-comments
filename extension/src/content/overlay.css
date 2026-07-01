@@ -1154,21 +1154,28 @@
   height: 16px;
 }
 
+.cc-rank-scorewrap {
+  display: inline-flex;
+  align-items: baseline;
+}
+
 .cc-rank-label {
-  font-size: var(--cc-fs-sm);
-  font-weight: 500;
+  font-size: var(--cc-fs-base);
+  font-weight: 600;
   color: var(--cc-text);
+  letter-spacing: -0.01em;
 }
 
 .cc-rank-score {
-  font-size: var(--cc-fs-xl);
-  font-weight: 500;
+  font-size: var(--cc-fs-2xl);
+  font-weight: 700;
   color: var(--cc-primary);
   line-height: 1;
+  letter-spacing: -0.02em;
 }
 
 .cc-rank-denom {
-  font-size: var(--cc-fs-sm);
+  font-size: var(--cc-fs-base);
   font-weight: 500;
   color: var(--cc-text-2);
   margin-left: 1px;
@@ -1179,6 +1186,9 @@
   font-weight: 600;
   color: var(--cc-primary);
   margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--cc-primary-soft);
 }
 
 .cc-rank-row {
@@ -1241,12 +1251,12 @@
 }
 
 .cc-rank-tab {
-  padding: 8px 8px;
+  padding: 9px 10px;
   border: none;
   background: transparent;
   color: var(--cc-text-2);
   font: inherit;
-  font-size: var(--cc-fs-sm);
+  font-size: var(--cc-fs-base);
   font-weight: 500;
   cursor: pointer;
   transition: color 0.12s var(--cc-ease);
@@ -1260,6 +1270,7 @@
 
 .cc-rank-tab--active {
   color: var(--cc-primary);
+  font-weight: 600;
   border-bottom-color: var(--cc-primary);
 }
 
@@ -1282,10 +1293,10 @@
 
 .cc-rank-section-cap {
   display: block;
-  font-size: var(--cc-fs-sm);
+  font-size: var(--cc-fs-base);
   font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--cc-text-3);
+  letter-spacing: -0.01em;
+  color: var(--cc-text-2);
   margin-bottom: 6px;
 }
 

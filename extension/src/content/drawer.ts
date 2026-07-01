@@ -137,8 +137,8 @@ export class Drawer {
     head.append(leftGroup);
     const refreshBtn = document.createElement("button") as HTMLButtonElement;
     refreshBtn.type = "button";
-    refreshBtn.className = "cc-rank-refresh cc-has-tip";
-    refreshBtn.dataset.tip = "Re-run the design score";
+    refreshBtn.className = "cc-rank-refresh";
+    refreshBtn.title = "Re-run the design score";
     refreshBtn.disabled = this.rating.status === "pending" || !this.ctx?.connected;
     refreshBtn.append(icon(ICON_REFRESH, "cc-rank-refresh-icon"));
     refreshBtn.addEventListener("click", () => this.handlers.onReRequestRating());
