@@ -25,7 +25,7 @@
       <img src="https://img.shields.io/npm/v/%40redline%2Fmcp-server" alt="npm version">
     </a>
     <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node >= 20">
-    <img src="https://img.shields.io/badge/Claude%20Code-plugin-blueviolet" alt="Claude Code plugin">
+    <img src="https://img.shields.io/badge/Model%20Context%20Protocol-server-blueviolet" alt="MCP server">
   </p>
 </div>
 
@@ -36,11 +36,11 @@
 - [Prerequisites](#prerequisites)
 - [Getting started](#getting-started)
 - [Usage](#usage)
-- [Uninstall](#uninstall)
 - [Source mapping](#source-mapping)
 - [Compatibility](#compatibility)
 - [FAQ](#faq)
 - [Security and privacy](#security-and-privacy)
+- [Uninstall](#uninstall)
 - [License](#license)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -66,7 +66,7 @@ and the assistant closes the marks.
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TD
     A["Browser extension\n(Chromium MV3)"]
     B["MCP server\n(127.0.0.1:7474)"]
     C["Comment store\n(.redline/)"]
@@ -82,13 +82,12 @@ flowchart LR
 
 The extension activates per-tab when you click its toolbar icon. Each saved item
 carries a stable selector, visible text, computed styles, a cropped screenshot,
-and, when available, a precise `file:line:column` from a framework inspector
-plugin. On a `localhost` dev server the extension sends those comments directly
-to the MCP server running in your project. In Claude Code, you paste the watch
-command from the toolbar and the MCP server binds the session, watches for new
-batches, and dispatches a sub-agent to implement each one with no approval step.
-Comments that need deeper thought are parked for later; a notice appears in the
-browser toolbar.
+and a precise `file:line:column` from the framework inspector plugin that
+anchors every edit to the right source location. On a `localhost` dev server the
+extension sends those comments directly to the MCP server running in your
+project. Your MCP client binds the session, watches for new batches, and applies
+each one against your real source files. Comments that need deeper thought are
+parked for later; a notice appears in the browser toolbar.
 
 For a deeper look at the architecture and the message flows, see the
 [docs folder](./docs).
@@ -100,29 +99,43 @@ For a deeper look at the architecture and the message flows, see the
 | Need | Why | Required? |
 |---|---|---|
 | Node 20+ | runs the MCP server via `npx` | Yes |
-| [Claude Code](https://claude.ai/code) | plugin host and watch loop | Yes |
+| An MCP-capable AI coding assistant | reads comments and edits your source (Claude Code, Cursor, Windsurf, or any MCP client) | Yes |
 | Chromium browser (Chrome, Edge, Brave, Arc) | extension | Yes |
-| Framework inspector plugin | precise `file:line:column` mapping | Optional |
-| [`redline-design-score` skill](./plugin/skills/redline-design-score/SKILL.md) | purpose-fit page scoring, bundled with the plugin | Optional |
+| Framework inspector plugin | precise `file:line:column` mapping | Yes |
+| [`redline-design-score` skill](./plugin/skills/redline-design-score/SKILL.md) | purpose-fit page scoring | Optional |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Getting started
 
-Four steps, nothing to clone or build. The plugin updates itself through Claude
-Code and the extension updates itself from the store.
+Four steps, nothing to clone or build. The MCP server is launched on demand via
+`npx`, and the extension updates itself from the store.
 
-### Step 1: Install the MCP server
+### Step 1 · Register the MCP server
 
-In Claude Code, run these two commands. They register the MCP server (launched
-on demand via `npx`) and the bundled design-scoring skill:
+Add `@redline/mcp-server` to your assistant's MCP configuration. Any MCP-capable
+client can launch it on demand via `npx`:
 
+```json
+{
+  "mcpServers": {
+    "redline": {
+      "command": "npx",
+      "args": ["-y", "@redline/mcp-server"]
+    }
+  }
+}
 ```
-/plugin marketplace add pallandir/redline
-/plugin install redline@redline
-```
 
-### Step 2: Install the browser extension
+> [!TIP]
+> In Claude Code, register it from the CLI instead:
+> ```sh
+> claude mcp add redline -- npx -y @redline/mcp-server
+> ```
+
+---
+
+### Step 2 · Install the browser extension
 
 The extension is required, it is what captures your comments on the page.
 Install Redline from the Chrome Web Store and pin it to your toolbar. It runs in
@@ -130,32 +143,47 @@ any Chromium browser (Chrome, Edge, Brave, Arc).
 
 [**Add to Chrome →**](https://chrome.google.com/webstore) *(store listing coming soon)*
 
-### Step 3: Connect the extension to your assistant
+---
 
-Open your frontend on a `localhost` dev server, with Claude Code running in the
-same repo, and click the Redline toolbar icon to activate it on that tab. Copy
-the `/mcp__redline__watch <id>` command from the toolbar and paste it into Claude
-Code. The session binds and Redline starts watching for comments.
+### Step 3 · Connect the extension to your assistant
 
-### Step 4: Start commenting
+Open your frontend on a `localhost` dev server, with your assistant running in
+the same repo, and click the Redline toolbar icon to activate it on that tab.
+Copy the session id from the toolbar and have your assistant call `bind_session`
+with it. The session binds and Redline starts watching for comments.
+
+> [!TIP]
+> In Claude Code, the toolbar's Copy button gives you a ready-made
+> `/mcp__redline__watch <id>` command. Paste it in and Claude binds the session
+> and drives the watch loop automatically.
+
+---
+
+### Step 4 · Start commenting
 
 Mark up the page with the toolbar tools, then click **Send to AI**. Each batch
-you send is implemented directly in your source by the watch loop. See
+you send is applied directly to your source by your assistant. See
 [Usage](#usage) for the full tour.
 
 > [!IMPORTANT]
 > The comment store (`.redline/design-comments.md`) and screenshots
-> (`.redline/design-shots/`) are written to the project root where Claude Code is
-> open and are gitignored. Keep them out of version control.
+> (`.redline/design-shots/`) are written to the project root where your MCP
+> client is running and are gitignored. Keep them out of version control.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Usage
 
-1. **Run your frontend** on a `localhost` dev server (or open a remote preview).
-   Open Claude Code in the repo whose source you want to edit. Launching Claude
-   starts the Redline MCP server, which opens a listener on `127.0.0.1:7474`
-   (falling back to 7475, then 7476).
+Redline runs in two modes depending on where your frontend lives.
+
+### Online · localhost dev server
+
+Comments flow live to your assistant over loopback and are applied to your
+source as you send them.
+
+1. **Run your frontend** on a `localhost` dev server. Start your MCP client in
+   the repo whose source you want to edit; it launches the Redline MCP server,
+   which opens a listener on `127.0.0.1:7474` (falling back to 7475, then 7476).
 
 2. **Click the Redline toolbar icon** to activate it on the current tab. This
    is the only moment Redline gains page access; the access ends when the tab
@@ -166,68 +194,46 @@ you send is implemented directly in your source by the watch loop. See
    live, **Text** to edit copy inline. Each saved item is pinned to its element
    and listed in the toolbar drawer.
 
-4. **Send to your assistant.** On `localhost`, items queue locally and clicking
-   **Send to AI** flushes the batch to the MCP server, waking the watch loop.
-   On a remote preview there is no local project, so use **Handoff** to download
-   a Markdown report for any assistant.
+4. **Bind the session.** Copy the session id from the toolbar and have your
+   assistant call `bind_session` with it so Redline starts watching.
 
-5. **Copy the watch command** from the toolbar or popup (the Copy button writes
-   the full `/mcp__redline__watch <id>` command; the display shows only the
-   short id for readability). Paste it into Claude Code. The MCP `watch` prompt
-   binds the session and starts watching: each time you send a batch it
-   implements the comments directly via a sub-agent, then marks them resolved.
-   Comments that need more thought (new dependencies, cross-cutting changes, or
-   anything you flag "Plan this first") are parked in
-   `.redline/redline-deferred.md` and a notice appears in the toolbar.
+5. **Send to AI.** Items queue locally; clicking **Send to AI** flushes the
+   batch to the MCP server. Your assistant applies each comment directly to your
+   source, then marks it resolved. Comments that need more thought (new
+   dependencies, cross-cutting changes, or anything you flag "Plan this first")
+   are parked in `.redline/redline-deferred.md` and a notice appears in the
+   toolbar.
 
-With any other MCP client, call `bind_session`, `wait_for_update`, and
-`list_comments` directly.
+With any MCP client, drive the loop directly with the raw tools: `bind_session`,
+`wait_for_update`, and `list_comments`.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+> [!TIP]
+> In Claude Code, the `/mcp__redline__watch <id>` prompt binds the session and
+> runs the watch loop for you, dispatching a sub-agent per batch with no
+> approval step.
 
-## Uninstall
+### Offline · remote preview or no local project
 
-Removing Redline is three independent steps; do the ones that apply to you.
+There is no local server to reach, so you export the batch and hand it to any
+assistant.
 
-1. **Remove the browser extension.** Open `chrome://extensions`, find the
-   Redline card, and click **Remove**. In Firefox-family builds, use
-   `about:addons`. This also clears the extension's local queue and stored
-   session token.
+1. **Open the remote preview** and click the Redline toolbar icon to activate it.
 
-2. **Uninstall the Claude Code plugin.**
+2. **Leave comments** the same way as online.
 
-   ```
-   /plugin uninstall redline
-   /plugin marketplace remove pallandir/redline
-   ```
-
-   If you registered the MCP server directly instead of through the plugin,
-   remove that registration:
-
-   ```sh
-   claude mcp remove redline
-   ```
-
-3. **Delete the local comment store.** The server writes everything into a
-   gitignored `.redline/` folder at your project root. Delete it to remove all
-   comments, deferrals, ratings, and screenshots:
-
-   ```sh
-   rm -rf .redline
-   ```
-
-   Nothing lives outside your machine, so there is no account or remote data to
-   clean up.
+3. **Handoff.** Click **Handoff** to download a Markdown report of the batch.
+   Give that report to any AI coding assistant to implement the changes.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Source mapping
 
-Comments always carry a selector, element text, and bounding rect so the
-assistant can locate the code by search. When the page's dev build exposes an
-inspector data attribute, comments also carry a precise `file:line:column`.
+Comments carry a selector, element text, and bounding rect as a coarse anchor,
+and a precise `file:line:column` from the framework inspector data attribute
+your dev build exposes. That precise location is what lets the assistant edit
+the exact source that renders each element.
 
-Add the matching plugin to your dev build to enable this:
+Add the matching plugin to your dev build:
 
 | Framework | Plugin | Notes |
 |---|---|---|
@@ -240,9 +246,9 @@ Add the matching plugin to your dev build to enable this:
 ## Compatibility
 
 Redline's MCP server speaks standard MCP over stdio and works with any
-MCP-capable AI coding assistant. It has been **tested with Claude Code**; other
-clients (Cursor, Windsurf, and similar) should work but are currently
-unverified.
+MCP-capable AI coding assistant, Claude Code, Cursor, Windsurf, and similar
+clients all connect the same way. Any client that can call the tools below can
+drive the full flow.
 
 The extension targets **Chromium Manifest V3**: Chrome, Edge, Brave, and Arc. A
 Firefox port is not yet available.
@@ -271,21 +277,21 @@ The server exposes 11 tools that any MCP client can call directly:
 
 **I sent comments but the assistant never picked them up.**
 Comments only leave the browser when you click **Send to AI** in the toolbar.
-**Save** enqueues a comment locally, **Send** flushes the batch to the server and
-wakes the watch loop. Make sure you also pasted the `/mcp__redline__watch <id>`
-command into Claude Code so a session is bound and watching.
+**Save** enqueues a comment locally, **Send** flushes the batch to the server.
+Make sure your assistant has bound the session (via `bind_session`, or the
+`/mcp__redline__watch <id>` prompt in Claude Code) so it is watching.
 
 **The extension says it cannot reach the server.**
 The server listens on loopback only, so the page you are commenting on must be a
-`localhost` or `127.0.0.1` dev server, and Claude Code must be open in the
-project (launching Claude starts the server). On a remote preview there is no
-local project to edit, so Redline keeps comments in the browser and you export
+`localhost` or `127.0.0.1` dev server, and your MCP client must be running in the
+project (starting the client launches the server). On a remote preview there is
+no local project to edit, so Redline keeps comments in the browser and you export
 them with **Handoff** instead.
 
 **Port 7474 is already in use.**
 The server automatically falls back to 7475, then 7476, and the extension probes
 the same range, so a busy port usually just works. To pin a specific port, set
-`REDLINE_PORT` in the environment where Claude Code launches the server.
+`REDLINE_PORT` in the environment where your client launches the server.
 
 **Can two projects run Redline at once?**
 Not in v1. One project binds the port and the session at a time. Set a different
@@ -319,6 +325,37 @@ on the current URL, and that access is revoked on navigation.
 
 See [SECURITY.md](./SECURITY.md) for the full threat model and
 [PRIVACY.md](./PRIVACY.md) for data handling details.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Uninstall
+
+Removing Redline is three independent steps; do the ones that apply to you.
+
+1. **Remove the browser extension.** Open `chrome://extensions`, find the
+   Redline card, and click **Remove**. In Firefox-family builds, use
+   `about:addons`. This also clears the extension's local queue and stored
+   session token.
+
+2. **Remove the MCP server registration.** Delete the `redline` entry from your
+   assistant's MCP configuration.
+
+   > [!TIP]
+   > In Claude Code, remove it from the CLI:
+   > ```sh
+   > claude mcp remove redline
+   > ```
+
+3. **Delete the local comment store.** The server writes everything into a
+   gitignored `.redline/` folder at your project root. Delete it to remove all
+   comments, deferrals, ratings, and screenshots:
+
+   ```sh
+   rm -rf .redline
+   ```
+
+   Nothing lives outside your machine, so there is no account or remote data to
+   clean up.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
