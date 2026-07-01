@@ -55,8 +55,8 @@ Inspect the exact tarball contents without publishing:
 npm pack --dry-run --workspace @redline/mcp-server
 ```
 
-The file list should be `dist/`, `manifest.json`, `README.md`, `LICENSE.md`, and
-`package.json`, and nothing from `src/`, `tests/`, or `scripts/`. The `prepack`
+The file list should be `dist/`, `README.md`, `LICENSE.md`, and `package.json`,
+and nothing from `src/` or `tests/`. The `prepack`
 step copies `LICENSE.md` into the package from the repo root, so it is present in
 both CI and a local pack even though the file is gitignored.
 

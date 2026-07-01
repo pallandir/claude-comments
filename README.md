@@ -34,7 +34,7 @@
 - [What is Redline](#what-is-redline)
 - [How it works](#how-it-works)
 - [Prerequisites](#prerequisites)
-- [Installation](#installation)
+- [Getting started](#getting-started)
 - [Usage](#usage)
 - [Uninstall](#uninstall)
 - [Source mapping](#source-mapping)
@@ -107,85 +107,41 @@ For a deeper look at the architecture and the message flows, see the
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Installation
+## Getting started
 
-### Step 1: Install the plugin in Claude Code
+Four steps, nothing to clone or build. The plugin updates itself through Claude
+Code and the extension updates itself from the store.
+
+### Step 1: Install the MCP server
 
 In Claude Code, run these two commands. They register the MCP server (launched
-on demand via `npx`, nothing to clone) and the `/redline` skill:
+on demand via `npx`) and the bundled design-scoring skill:
 
 ```
 /plugin marketplace add pallandir/redline
 /plugin install redline@redline
 ```
 
-That is the only step that happens inside Claude Code. Everything else is
-automated by the setup script below.
+### Step 2: Install the browser extension
 
-### Step 2: Run the setup script
+The extension is required, it is what captures your comments on the page.
+Install Redline from the Chrome Web Store and pin it to your toolbar. It runs in
+any Chromium browser (Chrome, Edge, Brave, Arc).
 
-Clone this repo once (only needed for the browser extension; the MCP server
-installs from npm):
+[**Add to Chrome →**](https://chrome.google.com/webstore) *(store listing coming soon)*
 
-```sh
-git clone https://github.com/pallandir/redline.git
-cd redline
-npm run setup
-```
+### Step 3: Connect the extension to your assistant
 
-The script checks your Node version, installs all dependencies, builds the
-extension, and prints exactly what to do next. It optionally registers the MCP
-server with the `claude` CLI if you want a global registration outside the
-plugin.
+Open your frontend on a `localhost` dev server, with Claude Code running in the
+same repo, and click the Redline toolbar icon to activate it on that tab. Copy
+the `/mcp__redline__watch <id>` command from the toolbar and paste it into Claude
+Code. The session binds and Redline starts watching for comments.
 
-### Step 3: Load the extension
+### Step 4: Start commenting
 
-The Chrome Web Store release is coming soon. For now, load the built extension
-unpacked:
-
-1. Open `chrome://extensions` in Chrome (or any Chromium browser).
-2. Enable **Developer mode** (top-right toggle).
-3. Click **Load unpacked** and select the `extension/dist` folder printed by the
-   setup script.
-
-The setup script prints the full absolute path so you can paste it directly.
-
-### Updating
-
-After a `git pull`, run:
-
-```sh
-npm run update
-```
-
-Then, in Claude Code:
-
-```
-/plugin update redline
-```
-
-And reload the extension in `chrome://extensions` (click the refresh icon on the
-Redline card). The update script handles everything else.
-
-### Other MCP clients
-
-Redline's server speaks standard MCP over stdio and works with any MCP-capable
-client. Register it directly without using the plugin:
-
-```sh
-claude mcp add redline -- npx -y @redline/mcp-server
-```
-
-For Claude Desktop and other bundle-based clients, build the `.mcpb` bundle and
-install it from there:
-
-```sh
-npm run pack:mcpb --workspace @redline/mcp-server
-```
-
-The bundled design-scoring skill lives at
-`plugin/skills/redline-design-score/SKILL.md`. Copy it into `.claude/skills/`
-(per project) or `~/.claude/skills/` (global) to use it outside the plugin.
+Mark up the page with the toolbar tools, then click **Send to AI**. Each batch
+you send is implemented directly in your source by the watch loop. See
+[Usage](#usage) for the full tour.
 
 > [!IMPORTANT]
 > The comment store (`.redline/design-comments.md`) and screenshots
@@ -342,8 +298,8 @@ root. Nothing is sent to any remote server, and there is no analytics or
 telemetry. See [PRIVACY.md](./PRIVACY.md).
 
 **When will the extension be on the Chrome Web Store?**
-The store listing is prepared and the release is coming soon. Until then, load
-the built extension unpacked as described in [Installation](#installation).
+The store listing is prepared and the release is coming soon. The
+[Getting started](#getting-started) section links to it.
 
 **How do I report a security issue?**
 Please do not open a public issue. Use a

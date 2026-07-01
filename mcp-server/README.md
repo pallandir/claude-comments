@@ -22,9 +22,6 @@ inside it).
 ```bash
 # Register from npm (no clone needed), e.g. with Claude Code:
 claude mcp add redline -- npx -y @redline/mcp-server
-
-# Or build a one-click bundle for Claude Desktop / MCP-bundle clients:
-npm run pack:mcpb        # produces ../redline.mcpb
 ```
 
 ## Tools

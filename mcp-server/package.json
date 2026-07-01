@@ -26,7 +26,7 @@
   "bin": {
     "redline-mcp": "dist/index.js"
   },
-  "files": ["dist", "manifest.json", "LICENSE.md", "README.md"],
+  "files": ["dist", "LICENSE.md", "README.md"],
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -37,7 +37,6 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/broker.test.ts tests/store.test.ts tests/server.test.ts tests/http.test.ts",
-    "pack:mcpb": "node scripts/pack-mcpb.mjs",
     "prepack": "node -e \"require('fs').copyFileSync('../LICENSE.md','LICENSE.md')\"",
     "prepublishOnly": "npm run build"
   },
@@ -46,7 +45,6 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@anthropic-ai/mcpb": "^2.1.2",
     "@types/node": "^22.10.5",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",

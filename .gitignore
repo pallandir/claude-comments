@@ -10,9 +10,7 @@ build/
 .vite/
 
 # Packaged release artifacts
-*.mcpb
 redline-extension*.zip
-mcp-server/.mcpb-stage/
 # Copied into the package at pack/publish time by the prepack script
 mcp-server/LICENSE.md
 

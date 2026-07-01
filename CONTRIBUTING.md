@@ -14,17 +14,14 @@ repo uses npm workspaces, so a single install at the root covers every package.
 
 ## Getting set up
 
-Clone the repo and run the setup script. It checks your Node version, installs
-everything, and builds the extension.
+Clone the repo, install dependencies, and build both workspaces.
 
 ```sh
 git clone https://github.com/pallandir/redline.git
 cd redline
-npm run setup
+npm install
+npm run build
 ```
-
-If you would rather do it by hand, `npm install` at the root is enough to get the
-dependencies in place.
 
 ## How the repo is laid out
 
