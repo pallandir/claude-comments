@@ -2,7 +2,7 @@
   "name": "@redline/extension",
   "version": "1.0.0",
   "description": "Chromium MV3 extension to leave real-time comments on any interface and route them to a local AI coding assistant.",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "private": true,
   "type": "module",
   "scripts": {

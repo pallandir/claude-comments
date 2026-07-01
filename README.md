@@ -36,8 +36,10 @@
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Uninstall](#uninstall)
 - [Source mapping](#source-mapping)
 - [Compatibility](#compatibility)
+- [FAQ](#faq)
 - [Security and privacy](#security-and-privacy)
 - [License](#license)
 
@@ -67,7 +69,7 @@ and the assistant closes the marks.
 flowchart LR
     A["Browser extension\n(Chromium MV3)"]
     B["MCP server\n(127.0.0.1:7474)"]
-    C["Comment store\n(.claude/)"]
+    C["Comment store\n(.redline/)"]
     D["/mcp__redline__watch\nwatch loop"]
     E["Sub-agent\nedits source"]
 
@@ -88,6 +90,9 @@ batches, and dispatches a sub-agent to implement each one with no approval step.
 Comments that need deeper thought are parked for later; a notice appears in the
 browser toolbar.
 
+For a deeper look at the architecture and the message flows, see the
+[docs folder](./docs).
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Prerequisites
@@ -95,10 +100,10 @@ browser toolbar.
 | Need | Why | Required? |
 |---|---|---|
 | Node 20+ | runs the MCP server via `npx` | Yes |
-| [Claude Code](https://claude.ai/code) | plugin host and `/redline` skill | Yes |
+| [Claude Code](https://claude.ai/code) | plugin host and watch loop | Yes |
 | Chromium browser (Chrome, Edge, Brave, Arc) | extension | Yes |
 | Framework inspector plugin | precise `file:line:column` mapping | Optional |
-| [`/top-design` skill](https://github.com/pallandir/redline) | Awwwards-style page scoring | Optional |
+| [`redline-design-score` skill](./plugin/skills/redline-design-score/SKILL.md) | purpose-fit page scoring, bundled with the plugin | Optional |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -178,13 +183,13 @@ install it from there:
 npm run pack:mcpb --workspace @redline/mcp-server
 ```
 
-The skill lives at `plugin/skills/redline/SKILL.md`. Copy it into
-`.claude/skills/` (per project) or `~/.claude/skills/` (global) to use it
-outside the plugin.
+The bundled design-scoring skill lives at
+`plugin/skills/redline-design-score/SKILL.md`. Copy it into `.claude/skills/`
+(per project) or `~/.claude/skills/` (global) to use it outside the plugin.
 
 > [!IMPORTANT]
-> The comment store (`.claude/design-comments.md`) and screenshots
-> (`.claude/design-shots/`) are written to the project root where Claude Code is
+> The comment store (`.redline/design-comments.md`) and screenshots
+> (`.redline/design-shots/`) are written to the project root where Claude Code is
 > open and are gitignored. Keep them out of version control.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -217,10 +222,46 @@ outside the plugin.
    implements the comments directly via a sub-agent, then marks them resolved.
    Comments that need more thought (new dependencies, cross-cutting changes, or
    anything you flag "Plan this first") are parked in
-   `.claude/redline-deferred.md` and a notice appears in the toolbar.
+   `.redline/redline-deferred.md` and a notice appears in the toolbar.
 
 With any other MCP client, call `bind_session`, `wait_for_update`, and
 `list_comments` directly.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Uninstall
+
+Removing Redline is three independent steps; do the ones that apply to you.
+
+1. **Remove the browser extension.** Open `chrome://extensions`, find the
+   Redline card, and click **Remove**. In Firefox-family builds, use
+   `about:addons`. This also clears the extension's local queue and stored
+   session token.
+
+2. **Uninstall the Claude Code plugin.**
+
+   ```
+   /plugin uninstall redline
+   /plugin marketplace remove pallandir/redline
+   ```
+
+   If you registered the MCP server directly instead of through the plugin,
+   remove that registration:
+
+   ```sh
+   claude mcp remove redline
+   ```
+
+3. **Delete the local comment store.** The server writes everything into a
+   gitignored `.redline/` folder at your project root. Delete it to remove all
+   comments, deferrals, ratings, and screenshots:
+
+   ```sh
+   rm -rf .redline
+   ```
+
+   Nothing lives outside your machine, so there is no account or remote data to
+   clean up.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -267,6 +308,47 @@ The server exposes 11 tools that any MCP client can call directly:
 | `list_rating_requests` | List pending or scored page rating requests |
 | `submit_rating` | Submit an Awwwards-style score for a rating request |
 | `clear_resolved` | Remove all non-open comments from the store |
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## FAQ
+
+**I sent comments but the assistant never picked them up.**
+Comments only leave the browser when you click **Send to AI** in the toolbar.
+**Save** enqueues a comment locally, **Send** flushes the batch to the server and
+wakes the watch loop. Make sure you also pasted the `/mcp__redline__watch <id>`
+command into Claude Code so a session is bound and watching.
+
+**The extension says it cannot reach the server.**
+The server listens on loopback only, so the page you are commenting on must be a
+`localhost` or `127.0.0.1` dev server, and Claude Code must be open in the
+project (launching Claude starts the server). On a remote preview there is no
+local project to edit, so Redline keeps comments in the browser and you export
+them with **Handoff** instead.
+
+**Port 7474 is already in use.**
+The server automatically falls back to 7475, then 7476, and the extension probes
+the same range, so a busy port usually just works. To pin a specific port, set
+`REDLINE_PORT` in the environment where Claude Code launches the server.
+
+**Can two projects run Redline at once?**
+Not in v1. One project binds the port and the session at a time. Set a different
+`REDLINE_PORT` per project if you need to switch between them.
+
+**Where is my data stored, and does anything leave my machine?**
+Everything stays local. Queued comments live in the browser's `chrome.storage`;
+once sent, they are written to a gitignored `.redline/` folder at your project
+root. Nothing is sent to any remote server, and there is no analytics or
+telemetry. See [PRIVACY.md](./PRIVACY.md).
+
+**When will the extension be on the Chrome Web Store?**
+The store listing is prepared and the release is coming soon. Until then, load
+the built extension unpacked as described in [Installation](#installation).
+
+**How do I report a security issue?**
+Please do not open a public issue. Use a
+[GitHub security advisory](https://github.com/pallandir/redline/security/advisories/new).
+Full details are in [SECURITY.md](./SECURITY.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

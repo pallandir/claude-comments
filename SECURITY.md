@@ -36,9 +36,9 @@ by your own AI coding assistant.
   binds edits to the located source, stays within UI changes, and sends no page
   content or comment data anywhere.
 - **Least-privilege extension.** The extension requests only `activeTab`,
-  `scripting`, `storage`, `unlimitedStorage`, and `alarms`, plus the loopback
-  host permissions above. It requests no `debugger` permission and holds no
-  capability to drive a page over the DevTools protocol.
+  `scripting`, `storage`, and `unlimitedStorage`, plus the loopback host
+  permissions above. It requests no `debugger` permission and holds no capability
+  to drive a page over the DevTools protocol.
 - **No remote code, no telemetry.** The extension and server build to static
   assets. The published npm package ships only `dist/`. There is no analytics,
   tracking, or external network call.

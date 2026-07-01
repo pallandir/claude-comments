@@ -50,7 +50,6 @@ device, even when the page itself is remote.
 - **storage / unlimitedStorage** — queues comments (which include screenshots)
   locally so commenting works even when the assistant's server is not running,
   and drains automatically when it is.
-- **alarms** — periodically flushes the local comment queue to the server.
 
 ## Data use disclosures
 

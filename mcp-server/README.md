@@ -12,9 +12,10 @@ It does two things in one process:
   solely from the extension (web-page origins and non-loopback hosts are
   rejected); payloads are validated against a strict schema.
 
-Comments are stored in `.claude/design-comments.md` and screenshots in
-`.claude/design-shots/`, relative to the working directory it is launched from.
-Both are gitignored.
+Comments are stored in `.redline/design-comments.md` and screenshots in
+`.redline/design-shots/`, relative to the working directory it is launched from.
+The `.redline/` folder is gitignored (the server also writes a `.gitignore`
+inside it).
 
 ## Install
 
@@ -28,11 +29,21 @@ npm run pack:mcpb        # produces ../redline.mcpb
 
 ## Tools
 
+The server exposes 11 tools. `list_comments` returns full per-comment detail, so
+there is no separate per-comment fetch.
+
 | Tool | Purpose |
 | --- | --- |
-| `list_comments(status?)` | List comments, optionally filtered by status. |
-| `get_comment(id)` | One comment with its source hint and screenshot path. |
-| `resolve_comment(id, status)` | Set `open` / `resolved` / `wontfix`. |
+| `bind_session(sessionId)` | Claim ownership of comment processing for this watch session. |
+| `unbind_session()` | Release ownership so another session can take over. |
+| `wait_for_update(sinceVersion?, timeoutMs?)` | Long-poll until the store changes; heartbeats the session binding. |
+| `list_comments(status?)` | List comments with full detail, optionally filtered by `open` / `resolved` / `wontfix`. |
+| `defer_comment(id, reason, ...)` | Park a comment (`needs-plan` or `feedback`) and notify the toolbar. |
+| `list_deferred()` | List deferred comments with their category and reason. |
+| `resolve_comment(id, status)` | Set a single comment to `open` / `resolved` / `wontfix`. |
+| `resolve_comments(resolutions[])` | Resolve or wontfix many comments in one call. |
+| `list_rating_requests(status?)` | List `pending` or `scored` page rating requests. |
+| `submit_rating(id, score, ui, ux, coherence, notes, sections)` | Submit a purpose-fit UI/UX score for a rating request. |
 | `clear_resolved()` | Remove every comment that is not open. |
 
 ## HTTP endpoints (for the extension)

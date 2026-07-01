@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Leave real-time comments on any interface and let your local AI coding assistant act on them.",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "workspaces": ["extension", "mcp-server"],
   "engines": {
     "node": ">=20"

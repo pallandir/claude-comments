@@ -45,6 +45,18 @@ First public release.
 - **Comment on any frontend, not just localhost.** Activate Redline on any site,
   a local dev server or a remote preview, while all captured data still travels
   only to the loopback listener and the assistant edits only the local repo.
+- **Watch loop over 11 MCP tools.** `bind_session` / `unbind_session` claim and
+  release a browser session, `wait_for_update` long-polls the store and
+  heartbeats the binding, `list_comments` returns full per-comment detail as the
+  batch read, `resolve_comment` / `resolve_comments` and `defer_comment` /
+  `list_deferred` close or park work, and `clear_resolved` prunes finished
+  entries. Comments flush only when the user clicks Send to AI.
+- **Purpose-fit page scoring.** `list_rating_requests` and `submit_rating`, plus
+  the bundled `redline-design-score` skill, rate a page screenshot for fitness to
+  its own purpose (ui, ux, coherence) rather than an absolute award-site bar.
+- **Figma-style toolbar.** A draggable in-page toolbar with Select, Comment,
+  Color, and Text tools, rendered in a closed shadow DOM, replacing the earlier
+  context-menu entry point.
 - Unit tests (`node:test`) for the comment store and the HTTP origin/Host gate
   and payload validation.
 - CI workflow (lint, typecheck, build, test) and an npm publish workflow with

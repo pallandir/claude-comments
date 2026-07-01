@@ -23,7 +23,7 @@ cropped to that element, not the whole page. This data:
 
 - is stored locally in your browser (`chrome.storage`) while queued, and
 - is sent **only** to a server running on your own computer
-  (`http://127.0.0.1`), which writes it into your project's `.claude/` folder.
+  (`http://127.0.0.1`), which writes it into your project's `.redline/` folder.
 
 None of it leaves your machine, even when the page itself is remote. The localhost
 server rejects requests from web pages, so only the extension can deliver comments
@@ -40,7 +40,6 @@ to it.
   access and grants no ability to contact any other site.
 - `storage`, `unlimitedStorage` — to queue comments (including screenshots)
   locally until your assistant's server is reachable.
-- `alarms` — to periodically flush the local queue.
 
 ## Contact
 
