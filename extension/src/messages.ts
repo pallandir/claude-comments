@@ -17,6 +17,8 @@ export interface PinModel {
   removable: boolean;
   route: string;
   target: string;
+  planFirst: boolean;
+  hasScreenshot: boolean;
   operation?: PinOperation;
 }
 
@@ -60,7 +62,13 @@ export type Message =
   | { type: "clear-comments"; url: string }
   | { type: "clear-all" }
   | { type: "count-all" }
-  | { type: "update-comment"; cid: string; text: string }
+  | {
+      type: "update-comment";
+      cid: string;
+      text: string;
+      planFirst?: boolean;
+      screenshotDataUrl?: string | null;
+    }
   | { type: "flush" }
   | { type: "dismiss-notice"; commentId: string }
   | { type: "queue-status" }

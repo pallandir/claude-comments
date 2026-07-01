@@ -10,6 +10,8 @@ async function send(
   }
 }
 
+const REFRESH_MS = 2000;
+
 async function init(): Promise<void> {
   const app = document.getElementById("app");
   if (!app) return;
@@ -23,15 +25,21 @@ async function init(): Promise<void> {
   const tabId = tab.id;
   const tabUrl = tab.url ?? "";
 
-  const [activeRes, statusRes] = await Promise.all([
-    send({ type: "sync-active", tabId }),
-    send({ type: "tab-status", tabId, url: tabUrl }),
-  ]);
+  const refresh = async () => {
+    const [activeRes, statusRes] = await Promise.all([
+      send({ type: "sync-active", tabId }),
+      send({ type: "tab-status", tabId, url: tabUrl }),
+    ]);
+    render(app, {
+      isActive: Boolean(activeRes.ok && activeRes.active),
+      status: statusRes.ok ? (statusRes.status ?? null) : null,
+      tabId,
+    });
+  };
 
-  const isActive = Boolean(activeRes.ok && activeRes.active);
-  const status = statusRes.ok ? (statusRes.status ?? null) : null;
-
-  render(app, { isActive, status, tabId });
+  await refresh();
+  const timer = window.setInterval(() => void refresh(), REFRESH_MS);
+  window.addEventListener("beforeunload", () => window.clearInterval(timer));
 }
 
 interface State {

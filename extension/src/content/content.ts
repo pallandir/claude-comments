@@ -263,10 +263,7 @@ function init(): void {
 
     let screenshot: string | null = null;
     if (payload.attachScreenshot !== false) {
-      surface.setHidden(true);
-      await nextPaint();
-      screenshot = await captureRegion(rect);
-      surface.setHidden(false);
+      screenshot = await captureHidden(rect);
     }
 
     const draft: DraftRequest = {
@@ -292,12 +289,17 @@ function init(): void {
     return res.ok && res.dataUrl ? res.dataUrl : null;
   }
 
-  async function publishPageRating(): Promise<void> {
-    const rect: Rect = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+  async function captureHidden(rect: Rect): Promise<string | null> {
     surface.setHidden(true);
     await nextPaint();
-    const screenshot = await captureRegion(rect);
+    const shot = await captureRegion(rect);
     surface.setHidden(false);
+    return shot;
+  }
+
+  async function publishPageRating(): Promise<void> {
+    const rect: Rect = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+    const screenshot = await captureHidden(rect);
     await send({ type: "request-rating", url: location.href, screenshotDataUrl: screenshot });
     st.lastRating = { id: "pending", status: "pending" };
     drawer?.setRating(st.lastRating);
@@ -339,8 +341,29 @@ function init(): void {
     if (res.ok && res.comments && res.comments.length > 0) downloadHandoff(res.comments);
   }
 
-  async function editComment(cid: string, text: string): Promise<void> {
-    await send({ type: "update-comment", cid, text });
+  async function editComment(
+    cid: string,
+    text: string,
+    opts?: { planFirst?: boolean; attachScreenshot?: boolean },
+  ): Promise<void> {
+    let screenshotDataUrl: string | null | undefined;
+    if (opts?.attachScreenshot === true) {
+      const pin = st.lastPins.find((p) => p.key === cid);
+      const el = pin ? resolveXPath(pin.operator) : null;
+      if (el instanceof Element) {
+        const r = el.getBoundingClientRect();
+        screenshotDataUrl = await captureHidden({ x: r.x, y: r.y, w: r.width, h: r.height });
+      }
+    } else if (opts?.attachScreenshot === false) {
+      screenshotDataUrl = null;
+    }
+    await send({
+      type: "update-comment",
+      cid,
+      text,
+      planFirst: opts?.planFirst,
+      screenshotDataUrl,
+    });
     await refresh();
   }
 
@@ -391,7 +414,7 @@ function init(): void {
     surface.setPins(
       st.lastPins,
       (key) => void removePin(key),
-      (key, text) => void editComment(key, text),
+      (key, text, opts) => void editComment(key, text, opts),
     );
     render();
   }

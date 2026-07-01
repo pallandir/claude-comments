@@ -155,8 +155,8 @@ function field(
 
   const resetBtn = document.createElement("button");
   resetBtn.type = "button";
-  resetBtn.className = "cc-field-reset";
-  resetBtn.title = "Reset to original";
+  resetBtn.className = "cc-field-reset cc-has-tip";
+  resetBtn.dataset.tip = "Reset to original";
   resetBtn.disabled = true;
   resetBtn.append(icon(ICON_RESET, "cc-field-reset-icon"));
 
@@ -197,8 +197,8 @@ function positionNear(box: HTMLElement, el: Element): void {
       ? aboveTop
       : belowTop;
   top = Math.min(Math.max(top, OVERLAY_MARGIN), window.innerHeight - h - OVERLAY_MARGIN);
-  box.style.left = `${left + window.scrollX}px`;
-  box.style.top = `${top + window.scrollY}px`;
+  box.style.left = `${left}px`;
+  box.style.top = `${top}px`;
 }
 
 function selectAll(el: Element): void {

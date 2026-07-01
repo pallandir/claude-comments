@@ -258,6 +258,21 @@ test("GET /state returns version, comments and watching flag", async () => {
   assert.equal(typeof body.watching, "boolean");
 });
 
+test("GET /ping returns live status and records the extension heartbeat", async () => {
+  const res = await call("GET", "/ping", authHeaders());
+  assert.equal(res.status, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(typeof body.version, "number");
+  assert.equal(typeof body.watching, "boolean");
+  assert.ok(Array.isArray(body.notices));
+  assert.equal(server.broker.isExtensionAlive(60_000), true);
+});
+
+test("GET /ping requires the bearer token", async () => {
+  const res = await call("GET", "/ping", { Host: loopbackHost(), Origin: ext });
+  assert.equal(res.status, 401);
+});
+
 test("GET /wait resolves immediately when version has already advanced", async () => {
   const res = await call("GET", "/wait?since=0", authHeaders());
   assert.equal(res.status, 200);

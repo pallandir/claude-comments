@@ -113,7 +113,6 @@ export class Toolbar {
     this.targetBtn.classList.toggle("cc-action--active", state.picking);
     this.targetBtn.dataset.tip = state.picking ? "Pause element picking" : "Resume element picking";
 
-    this.commentsBtn.classList.toggle("cc-action--active", state.drawerOpen);
     this.commentsLabel.textContent = `Comments (${state.count})`;
 
     if (state.mode === "remote") {

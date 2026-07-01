@@ -31,6 +31,7 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     if (closing) return;
     closing = true;
+    broker.unbindSession();
     await ingest.close();
     process.exit(0);
   };

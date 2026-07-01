@@ -139,9 +139,24 @@ async function handle(
     return;
   }
 
-  // All routes below this point require a valid bearer token.
+  // All routes below this point require a valid bearer token. A valid token means
+  // the request came from the paired extension, so any authenticated call is a
+  // liveness signal — the reverse heartbeat behind isExtensionAlive.
   if (!authorized(req, broker)) {
     json(res, 401, { error: "unauthorized" });
+    return;
+  }
+  broker.markExtensionSeen();
+
+  // The extension's steady poll: a lightweight live-status read (no comment list)
+  // so the toolbar reflects watching changes promptly. Being authenticated, it
+  // also refreshes the extension heartbeat via the gate above.
+  if (req.method === "GET" && pathname === "/ping") {
+    json(res, 200, {
+      version: broker.currentVersion,
+      watching: broker.isBoundAlive(SESSION_ALIVE_TTL_MS),
+      notices: broker.pendingNotices,
+    });
     return;
   }
 

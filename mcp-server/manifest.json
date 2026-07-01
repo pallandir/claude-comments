@@ -59,7 +59,7 @@
     { "name": "clear_resolved", "description": "Remove every comment that is not open." },
     {
       "name": "wait_for_update",
-      "description": "Block until the store changes or a short timeout; heartbeats the session binding."
+      "description": "Block until the store changes or a short timeout; heartbeats the session binding and signals stop when the extension disconnects."
     },
     {
       "name": "bind_session",
@@ -77,7 +77,7 @@
     },
     {
       "name": "submit_rating",
-      "description": "Submit Awwwards-style UI/UX rating using the /redline-design-score skill; falls back to own judgment when the skill is unavailable."
+      "description": "Submit a UI/UX rating scored for fitness to the page's own purpose using the /redline-design-score skill; falls back to own judgment when the skill is unavailable."
     }
   ],
   "compatibility": {

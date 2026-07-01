@@ -122,7 +122,10 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     case "count-all":
       return { ok: true, count: isLocalUrl(sender.tab?.url ?? "") ? await countAll() : 0 };
     case "update-comment":
-      await update(message.cid, message.text);
+      await update(message.cid, message.text, {
+        planFirst: message.planFirst,
+        screenshotDataUrl: message.screenshotDataUrl,
+      });
       return { ok: true, status: await status() };
     case "flush": {
       const local = isLocalUrl(sender.tab?.url ?? "");
@@ -191,6 +194,8 @@ async function pagePins(url: string, tabUrl?: string): Promise<PinModel[]> {
         removable: true,
         route: routeOf(q.url),
         target: targetLabel(q.operator, q.source, q.metadata.elementText),
+        planFirst: q.planFirst ?? false,
+        hasScreenshot: Boolean(q.screenshotDataUrl),
         operation: { property: q.operation.property, from: q.operation.from, to: q.operation.to },
       }),
     ),
@@ -204,6 +209,8 @@ async function pagePins(url: string, tabUrl?: string): Promise<PinModel[]> {
         removable: false,
         route: s.metadata.page,
         target: targetLabel(s.operator, s.source ?? null, s.metadata.elementText),
+        planFirst: false,
+        hasScreenshot: false,
         operation: { property: s.operation.property, from: s.operation.from, to: s.operation.to },
       }),
     ),

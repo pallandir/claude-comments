@@ -24,7 +24,7 @@
     "vitest": "^3.2.6"
   },
   "dependencies": {
-    "@material-symbols/svg-400": "^0.45.2",
+    "@material-symbols/svg-400": "^0.45.4",
     "dompurify": "^3.4.11",
     "marked": "^18.0.5"
   }

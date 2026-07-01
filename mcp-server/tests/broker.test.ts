@@ -49,6 +49,40 @@ test("verifyToken returns false for a different string of same length", () => {
   assert.equal(broker.verifyToken("bbbbbbbbbb"), false);
 });
 
+test("bindSession seeds the extension heartbeat so a fresh session is alive", () => {
+  const broker = new Broker();
+  broker.bindSession("token-a");
+  assert.equal(broker.isExtensionAlive(60_000), true);
+});
+
+test("isExtensionAlive is false when no session is bound", () => {
+  const broker = new Broker();
+  broker.markExtensionSeen();
+  assert.equal(broker.isExtensionAlive(60_000), false);
+});
+
+test("isExtensionAlive is true while the extension heartbeat is fresh", () => {
+  const broker = new Broker();
+  broker.bindSession("token-a");
+  broker.markExtensionSeen();
+  assert.equal(broker.isExtensionAlive(60_000), true);
+});
+
+test("isExtensionAlive is false once the heartbeat is older than the ttl", () => {
+  const broker = new Broker();
+  broker.bindSession("token-a");
+  broker.markExtensionSeen();
+  assert.equal(broker.isExtensionAlive(0), false);
+});
+
+test("unbindSession clears the extension heartbeat", () => {
+  const broker = new Broker();
+  broker.bindSession("token-a");
+  broker.markExtensionSeen();
+  broker.unbindSession();
+  assert.equal(broker.isExtensionAlive(60_000), false);
+});
+
 test("wait resolves immediately when version has advanced", async () => {
   const broker = new Broker();
   const v0 = broker.currentVersion;

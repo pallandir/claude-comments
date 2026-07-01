@@ -32,6 +32,14 @@ export interface ModalOptions {
   onDismiss: () => void;
 }
 
+export interface ComposerOptions {
+  initialText?: string;
+  initialPlanFirst?: boolean;
+  initialAttachScreenshot?: boolean;
+  title?: string;
+  onDelete?: () => void;
+}
+
 export class Surface {
   private readonly host: HTMLElement;
   private readonly shadow: ShadowRoot;
@@ -136,17 +144,17 @@ export class Surface {
     const rect = target.getBoundingClientRect();
     const menuW = menu.offsetWidth || 188;
     const menuH = menu.offsetHeight || 60;
-    const above = rect.top + window.scrollY - menuH - 10;
-    const below = rect.bottom + window.scrollY + 10;
-    const preferAbove = above > window.scrollY + 8;
+    const above = rect.top - menuH - 10;
+    const below = rect.bottom + 10;
+    const preferAbove = above > 8;
     const topRaw = preferAbove ? above : below;
     const clampedTop = Math.min(
-      Math.max(window.scrollY + OVERLAY_MARGIN, topRaw),
-      window.scrollY + window.innerHeight - menuH - OVERLAY_MARGIN,
+      Math.max(OVERLAY_MARGIN, topRaw),
+      window.innerHeight - menuH - OVERLAY_MARGIN,
     );
     const clampedLeft = Math.min(
-      Math.max(OVERLAY_MARGIN + window.scrollX, rect.left + window.scrollX),
-      window.scrollX + window.innerWidth - menuW - OVERLAY_MARGIN,
+      Math.max(OVERLAY_MARGIN, rect.left),
+      window.innerWidth - menuW - OVERLAY_MARGIN,
     );
     menu.style.top = `${clampedTop}px`;
     menu.style.left = `${clampedLeft}px`;
@@ -238,13 +246,14 @@ export class Surface {
       options: { planFirst: boolean; attachScreenshot: boolean },
     ) => Promise<void> | void,
     onCancel?: () => void,
+    opts?: ComposerOptions,
   ): void {
     this.mount();
     this.closeComposer();
     this.composerAnchor = target;
 
-    let planFirst = false;
-    let attachScreenshot = false;
+    let planFirst = opts?.initialPlanFirst ?? false;
+    let attachScreenshot = opts?.initialAttachScreenshot ?? false;
 
     const highlight = document.createElement("div");
     highlight.className = "cc-highlight";
@@ -254,10 +263,11 @@ export class Surface {
 
     const head = document.createElement("div");
     head.className = "cc-panel-head";
-    head.textContent = "Add comment";
+    head.textContent = opts?.title ?? "Add comment";
 
     const textarea = document.createElement("textarea");
     textarea.placeholder = "What should your AI assistant change here?";
+    textarea.value = opts?.initialText ?? "";
 
     const toggleRow = document.createElement("div");
     toggleRow.className = "cc-toggle-row";
@@ -266,7 +276,7 @@ export class Surface {
     screenshotBtn.type = "button";
     screenshotBtn.className = "cc-toggle";
     screenshotBtn.setAttribute("role", "switch");
-    screenshotBtn.setAttribute("aria-pressed", "false");
+    screenshotBtn.setAttribute("aria-pressed", String(attachScreenshot));
     const screenshotLabel = document.createElement("span");
     screenshotLabel.className = "cc-toggle-label";
     screenshotLabel.textContent = "Attach screenshot";
@@ -282,7 +292,7 @@ export class Surface {
     planBtn.type = "button";
     planBtn.className = "cc-toggle";
     planBtn.setAttribute("role", "switch");
-    planBtn.setAttribute("aria-pressed", "false");
+    planBtn.setAttribute("aria-pressed", String(planFirst));
     const planLabel = document.createElement("span");
     planLabel.className = "cc-toggle-label";
     planLabel.textContent = "Plan as a separate task";
@@ -334,7 +344,19 @@ export class Surface {
       }
     });
 
-    actions.append(hint, cancel, save);
+    actions.append(hint);
+    if (opts?.onDelete) {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "cc-btn cc-btn--ghost";
+      del.textContent = "Delete";
+      del.addEventListener("click", () => {
+        this.closeComposer();
+        opts.onDelete?.();
+      });
+      actions.append(del);
+    }
+    actions.append(cancel, save);
     panel.append(head, textarea, toggleRow, actions);
     this.composerHighlight = highlight;
     this.composer = panel;
@@ -347,7 +369,11 @@ export class Surface {
   setPins(
     models: PinModel[],
     onRemove: (key: string) => void,
-    onEdit: (key: string, text: string) => void,
+    onEdit: (
+      key: string,
+      text: string,
+      opts?: { planFirst?: boolean; attachScreenshot?: boolean },
+    ) => void,
   ): void {
     this.mount();
     for (const pin of this.pins) pin.el.remove();
@@ -375,75 +401,24 @@ export class Surface {
       card.append(preview);
 
       if (model.removable) {
-        const editSection = document.createElement("div");
-        editSection.className = "cc-pin-card-edit";
-        editSection.hidden = true;
-
-        const textarea = document.createElement("textarea");
-        textarea.className = "cc-drawer-edit";
-        textarea.value = model.text;
-
-        const btnRow = document.createElement("div");
-        btnRow.className = "cc-pin-card-actions";
-
-        const delBtn = document.createElement("button");
-        delBtn.type = "button";
-        delBtn.className = "cc-btn cc-btn--ghost";
-        delBtn.textContent = "Delete";
-
-        const saveBtn = document.createElement("button");
-        saveBtn.type = "button";
-        saveBtn.className = "cc-btn cc-btn--primary";
-        saveBtn.textContent = "Save";
-
-        btnRow.append(delBtn, saveBtn);
-        editSection.append(textarea, btnRow);
-        card.append(editSection);
-
-        const enterEdit = () => {
-          preview.hidden = true;
-          editSection.hidden = false;
-          wrap.classList.add("cc-pin-wrap--editing");
-          textarea.value = model.text;
-          textarea.focus();
-        };
-
-        const exitEdit = () => {
-          preview.hidden = false;
-          editSection.hidden = true;
-          wrap.classList.remove("cc-pin-wrap--editing");
-        };
-
         marker.style.cursor = "pointer";
         marker.addEventListener("click", (event) => {
           event.stopPropagation();
-          enterEdit();
+          const anchor = resolveXPath(model.operator);
+          if (!anchor) return;
+          this.showComposer(
+            anchor,
+            (text, options) => onEdit(model.key, text, options),
+            undefined,
+            {
+              initialText: model.text,
+              initialPlanFirst: model.planFirst,
+              initialAttachScreenshot: model.hasScreenshot,
+              title: "Edit comment",
+              onDelete: () => onRemove(model.key),
+            },
+          );
         });
-
-        saveBtn.addEventListener("click", (event) => {
-          event.stopPropagation();
-          const value = textarea.value.trim();
-          exitEdit();
-          if (value && value !== model.text) onEdit(model.key, value);
-        });
-
-        delBtn.addEventListener("click", (event) => {
-          event.stopPropagation();
-          exitEdit();
-          onRemove(model.key);
-        });
-
-        const onDocClick = (event: Event) => {
-          if (!wrap.contains(event.target as Node)) exitEdit();
-        };
-        const onKey = (event: KeyboardEvent) => {
-          if (event.key === "Escape") {
-            event.stopPropagation();
-            exitEdit();
-          }
-        };
-        wrap.addEventListener("keydown", onKey);
-        document.addEventListener("click", onDocClick, true);
       }
 
       wrap.append(marker, card);
@@ -497,8 +472,8 @@ export class Surface {
       }
       const rect = pin.anchor.getBoundingClientRect();
       pin.el.style.display = "";
-      pin.el.style.left = `${rect.left + window.scrollX}px`;
-      pin.el.style.top = `${rect.top + window.scrollY}px`;
+      pin.el.style.left = `${rect.left}px`;
+      pin.el.style.top = `${rect.top}px`;
     }
 
     if (this.selectionEl?.isConnected && this.selectionBox)
@@ -509,16 +484,13 @@ export class Surface {
       place(this.composerHighlight, this.composerAnchor);
       const panelH = this.composer.offsetHeight || 220;
       const clampedLeft = Math.min(
-        Math.max(OVERLAY_MARGIN + window.scrollX, rect.left + window.scrollX),
-        window.scrollX + window.innerWidth - COMPOSER_WIDTH - OVERLAY_MARGIN,
+        Math.max(OVERLAY_MARGIN, rect.left),
+        window.innerWidth - COMPOSER_WIDTH - OVERLAY_MARGIN,
       );
       const fitsBelow = rect.bottom + panelH + OVERLAY_MARGIN <= window.innerHeight;
       const topRaw = fitsBelow
-        ? rect.bottom + window.scrollY + OVERLAY_MARGIN
-        : Math.max(
-            window.scrollY + OVERLAY_MARGIN,
-            rect.top + window.scrollY - panelH - OVERLAY_MARGIN,
-          );
+        ? rect.bottom + OVERLAY_MARGIN
+        : Math.max(OVERLAY_MARGIN, rect.top - panelH - OVERLAY_MARGIN);
       this.composer.style.left = `${clampedLeft}px`;
       this.composer.style.top = `${topRaw}px`;
     }
@@ -544,8 +516,8 @@ function menuButton(glyphEl: SVGSVGElement, label: string, onClick: () => void):
 
 function place(box: HTMLElement, target: Element): void {
   const rect = target.getBoundingClientRect();
-  box.style.left = `${rect.left + window.scrollX}px`;
-  box.style.top = `${rect.top + window.scrollY}px`;
+  box.style.left = `${rect.left}px`;
+  box.style.top = `${rect.top}px`;
   box.style.width = `${rect.width}px`;
   box.style.height = `${rect.height}px`;
 }

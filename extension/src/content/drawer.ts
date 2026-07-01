@@ -43,7 +43,7 @@ export class Drawer {
     this.rankEl.className = "cc-drawer-card cc-rank-card";
 
     const card = document.createElement("div");
-    card.className = "cc-drawer-card";
+    card.className = "cc-drawer-card cc-comments-card";
 
     const head = document.createElement("div");
     head.className = "cc-drawer-head";
@@ -105,16 +105,22 @@ export class Drawer {
     }
     this.rankEl.hidden = false;
 
-    const result = this.rating.status === "scored" ? this.rating.result : null;
+    const result =
+      this.rating.status === "scored" && this.rating.result
+        ? { ...this.rating.result, sections: this.rating.result.sections ?? [] }
+        : null;
 
     const head = document.createElement("div");
     head.className = "cc-rank-head";
+    const leftGroup = document.createElement("span");
+    leftGroup.className = "cc-rank-headline";
     const label = document.createElement("span");
     label.className = "cc-rank-label";
     label.textContent = "Design score";
-    head.append(label);
+    leftGroup.append(label);
     if (result) {
       const scoreWrap = document.createElement("span");
+      scoreWrap.className = "cc-rank-scorewrap";
       const score = document.createElement("span");
       score.className = "cc-rank-score";
       score.textContent = String(result.score);
@@ -126,34 +132,18 @@ export class Drawer {
       band.textContent = scoreBand(result.score);
       score.append(denom);
       scoreWrap.append(score, band);
-      head.append(scoreWrap);
+      leftGroup.append(scoreWrap);
     }
+    head.append(leftGroup);
     const refreshBtn = document.createElement("button") as HTMLButtonElement;
     refreshBtn.type = "button";
-    refreshBtn.className = "cc-rank-refresh";
+    refreshBtn.className = "cc-rank-refresh cc-has-tip";
+    refreshBtn.dataset.tip = "Re-run the design score";
     refreshBtn.disabled = this.rating.status === "pending" || !this.ctx?.connected;
     refreshBtn.append(icon(ICON_REFRESH, "cc-rank-refresh-icon"));
     refreshBtn.addEventListener("click", () => this.handlers.onReRequestRating());
     head.append(refreshBtn);
     this.rankEl.append(head);
-
-    if (result) {
-      const derivation = document.createElement("div");
-      derivation.className = "cc-rank-derivation";
-      const caption = document.createElement("span");
-      caption.className = "cc-rank-derivation-caption";
-      caption.textContent = "avg of";
-      const dims = document.createElement("span");
-      dims.className = "cc-rank-derivation-dims";
-      dims.textContent = `UI ${result.ui} · UX ${result.ux} · Coherence ${result.coherence}`;
-      derivation.append(caption, dims);
-      this.rankEl.append(derivation);
-
-      const notes = document.createElement("div");
-      notes.className = "cc-rank-notes";
-      notes.textContent = `"${result.notes}"`;
-      this.rankEl.append(notes);
-    }
 
     const tabs = document.createElement("div");
     tabs.className = "cc-rank-tabs";
@@ -180,7 +170,7 @@ export class Drawer {
     body.className = "cc-rank-body";
 
     if (this.rankTab === "scores") {
-      if (!result) {
+      if (!result || result.sections.length === 0) {
         for (const lbl of ["Typography", "Composition", "Motion", "Color", "Details"]) {
           body.append(scoreBar(lbl, null));
         }
@@ -193,14 +183,22 @@ export class Drawer {
       if (!result) {
         body.append(emptyState("Advice appears once the page is scored."));
       } else {
+        const review = document.createElement("div");
+        review.className = "cc-rank-review";
+        review.append(sectionCap("Review"));
         const lead = document.createElement("p");
         lead.className = "cc-rank-advice-lead";
         lead.textContent = result.notes;
-        body.append(lead);
+        review.append(lead);
+        body.append(review);
+
         const withAdvice = result.sections.filter((s: PageRatingSection) => s.advice);
         if (withAdvice.length === 0) {
           body.append(emptyState("No per-section advice available."));
         } else {
+          const advice = document.createElement("div");
+          advice.className = "cc-rank-advice-group";
+          advice.append(sectionCap("Advice"));
           for (const s of withAdvice) {
             const row = document.createElement("div");
             row.className = "cc-rank-advice";
@@ -211,8 +209,9 @@ export class Drawer {
             txt.className = "cc-rank-advice-text";
             txt.textContent = s.advice;
             row.append(lbl, txt);
-            body.append(row);
+            advice.append(row);
           }
+          body.append(advice);
         }
       }
     }
@@ -371,6 +370,13 @@ function scoreBand(score: number): string {
   if (score >= 51) return "Good";
   if (score >= 26) return "Fair";
   return "Needs work";
+}
+
+function sectionCap(text: string): HTMLElement {
+  const cap = document.createElement("span");
+  cap.className = "cc-rank-section-cap";
+  cap.textContent = text;
+  return cap;
 }
 
 function emptyState(text: string): HTMLElement {

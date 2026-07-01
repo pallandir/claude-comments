@@ -16,6 +16,7 @@ export class Broker {
   private boundToken: string | null = null;
   private boundTokenBuf: Buffer | null = null;
   private boundHeartbeatAt: string | null = null;
+  private extensionSeenAt: string | null = null;
   private notices: DeferralNotice[] = [];
 
   get currentVersion(): number {
@@ -73,6 +74,7 @@ export class Broker {
     this.boundToken = token;
     this.boundTokenBuf = Buffer.from(token);
     this.boundHeartbeatAt = new Date().toISOString();
+    this.extensionSeenAt = new Date().toISOString();
     this.bump();
     return { ok: true };
   }
@@ -81,7 +83,24 @@ export class Broker {
     this.boundToken = null;
     this.boundTokenBuf = null;
     this.boundHeartbeatAt = null;
+    this.extensionSeenAt = null;
     this.bump();
+  }
+
+  markExtensionSeen(): void {
+    this.extensionSeenAt = new Date().toISOString();
+  }
+
+  // Mirror of isBoundAlive for the other direction: the extension is alive while
+  // a session is bound and it made an authenticated request within the ttl.
+  // bindSession seeds extensionSeenAt, so a session whose extension never polls
+  // (disabled at bind time) still lapses instead of watching forever.
+  isExtensionAlive(ttlMs: number): boolean {
+    return (
+      this.boundToken !== null &&
+      this.extensionSeenAt !== null &&
+      Date.now() - Date.parse(this.extensionSeenAt) < ttlMs
+    );
   }
 
   // Constant-time comparison to prevent timing side-channels.

@@ -38,7 +38,6 @@ interface Health {
   root?: string;
   startedAt?: string;
   version?: number;
-  lastPolledAt?: string | null;
   watching?: boolean;
   notices?: DeferralNotice[];
 }
@@ -47,11 +46,12 @@ interface ServerCandidate {
   port: number;
   root: string;
   startedAt: string;
-  lastPolledAt: string | null;
   watching: boolean;
   notices: DeferralNotice[];
   version: number | null;
 }
+
+type LiveStatus = Pick<ServerCandidate, "version" | "watching" | "notices">;
 
 interface ServerInfo extends ServerCandidate {
   token: string;
@@ -181,11 +181,17 @@ export async function countAll(): Promise<number> {
   }
 }
 
-export async function update(cid: string, text: string): Promise<void> {
+export async function update(
+  cid: string,
+  text: string,
+  opts?: { planFirst?: boolean; screenshotDataUrl?: string | null },
+): Promise<void> {
   const queue = await getQueue();
   const item = queue.find((c) => c.cid === cid);
   if (item) {
     item.comment = text;
+    if (opts?.planFirst !== undefined) item.planFirst = opts.planFirst;
+    if (opts?.screenshotDataUrl !== undefined) item.screenshotDataUrl = opts.screenshotDataUrl;
     await setQueue(queue);
   }
 }
@@ -202,7 +208,6 @@ async function probe(port: number): Promise<ServerCandidate | null> {
       port,
       root: body.root,
       startedAt: body.startedAt,
-      lastPolledAt: body.lastPolledAt ?? null,
       watching: body.watching ?? false,
       notices: body.notices ?? [],
       version: body.version ?? null,
@@ -355,9 +360,34 @@ export async function flush(): Promise<QueueStatus> {
   return statusFrom(fresh, (await getQueue()).length);
 }
 
+// Discovery (port + token handshake) stays cached, but the watching flag and
+// notices are read live every call so the toolbar reflects the session ending
+// promptly. The GET /ping also refreshes the server's extension-alive heartbeat,
+// so a disabled or closed extension stops pinging and the watcher releases.
+async function livePing(server: ServerInfo): Promise<LiveStatus | null> {
+  try {
+    const res = await request("GET", server.port, "/ping", undefined, server.token);
+    if (!res.ok) return null;
+    const body = (await res.json()) as Partial<LiveStatus>;
+    return {
+      version: body.version ?? null,
+      watching: body.watching ?? false,
+      notices: body.notices ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function status(): Promise<QueueStatus> {
-  const server = await findServer();
-  return statusFrom(server, (await getQueue()).length);
+  const [queue, server] = await Promise.all([getQueue(), findServer()]);
+  if (!server) return statusFrom(null, queue.length);
+  const live = await livePing(server);
+  if (!live) {
+    serverCache = null;
+    return statusFrom(null, queue.length);
+  }
+  return statusFrom({ ...server, ...live }, queue.length);
 }
 
 export async function reopenComment(id: string, note?: string): Promise<void> {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, test } from "node:test";
+import { afterEach, beforeEach, mock, test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Broker } from "../src/broker.js";
@@ -137,6 +137,35 @@ test("wait_for_update times out and returns current state", async () => {
   assert.ok(Date.now() - start >= 900, "should have waited ~1 second");
   const parsed = JSON.parse(text(result));
   assert.ok(typeof parsed.version === "number");
+});
+
+test("wait_for_update signals stop and unbinds when the extension heartbeat lapses", async () => {
+  mock.timers.enable({ apis: ["Date"] });
+  try {
+    broker.bindSession("owner-token");
+    mock.timers.tick(91_000);
+    const result = await client.callTool({
+      name: "wait_for_update",
+      arguments: { timeoutMs: 1000 },
+    });
+    const parsed = JSON.parse(text(result));
+    assert.equal(parsed.stop, true);
+    assert.equal(parsed.bound, false);
+    assert.equal(broker.verifyToken("owner-token"), false);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("wait_for_update does not stop a freshly bound session that has not pinged", async () => {
+  broker.bindSession("owner-token");
+  const result = await client.callTool({
+    name: "wait_for_update",
+    arguments: { sinceVersion: broker.currentVersion - 1, timeoutMs: 1000 },
+  });
+  const parsed = JSON.parse(text(result));
+  assert.equal(parsed.stop, false);
+  assert.equal(broker.verifyToken("owner-token"), true);
 });
 
 test("resolve_comment updates a comment's status", async () => {
