@@ -113,8 +113,15 @@ Four steps, nothing to clone or build. The MCP server is launched on demand via
 
 ### Step 1 · Register the MCP server
 
-Add `@redline/mcp-server` to your assistant's MCP configuration. Any MCP-capable
-client can launch it on demand via `npx`:
+There is nothing to install ahead of time. `npx` fetches and runs the server on
+demand, so you can start it directly:
+
+```sh
+npx -y @redline/mcp-server
+```
+
+To wire it into your assistant, add the same command to your MCP configuration.
+Any MCP-capable client can launch it on demand via `npx`:
 
 ```json
 {
@@ -126,12 +133,6 @@ client can launch it on demand via `npx`:
   }
 }
 ```
-
-> [!TIP]
-> In Claude Code, register it from the CLI instead:
-> ```sh
-> claude mcp add redline -- npx -y @redline/mcp-server
-> ```
 
 ---
 
@@ -152,11 +153,6 @@ the same repo, and click the Redline toolbar icon to activate it on that tab.
 Copy the session id from the toolbar and have your assistant call `bind_session`
 with it. The session binds and Redline starts watching for comments.
 
-> [!TIP]
-> In Claude Code, the toolbar's Copy button gives you a ready-made
-> `/mcp__redline__watch <id>` command. Paste it in and Claude binds the session
-> and drives the watch loop automatically.
-
 ---
 
 ### Step 4 · Start commenting
@@ -174,54 +170,36 @@ you send is applied directly to your source by your assistant. See
 
 ## Usage
 
-Redline runs in two modes depending on where your frontend lives.
+[Getting started](#getting-started) covers the one-time setup. Day to day,
+Redline runs in one of two modes depending on where your frontend lives.
 
 ### Online · localhost dev server
 
-Comments flow live to your assistant over loopback and are applied to your
-source as you send them.
+Your assistant runs in the repo and comments flow to it live over loopback.
 
-1. **Run your frontend** on a `localhost` dev server. Start your MCP client in
-   the repo whose source you want to edit; it launches the Redline MCP server,
-   which opens a listener on `127.0.0.1:7474` (falling back to 7475, then 7476).
-
-2. **Click the Redline toolbar icon** to activate it on the current tab. This
-   is the only moment Redline gains page access; the access ends when the tab
-   navigates. A draggable Figma-style toolbar appears.
-
-3. **Leave comments** with the four tools: **Select** to inspect an element,
+1. **Leave comments** with the four tools: **Select** to inspect an element,
    **Comment** to leave a note, **Color** to change text or background color
    live, **Text** to edit copy inline. Each saved item is pinned to its element
    and listed in the toolbar drawer.
 
-4. **Bind the session.** Copy the session id from the toolbar and have your
-   assistant call `bind_session` with it so Redline starts watching.
-
-5. **Send to AI.** Items queue locally; clicking **Send to AI** flushes the
-   batch to the MCP server. Your assistant applies each comment directly to your
-   source, then marks it resolved. Comments that need more thought (new
+2. **Send to AI.** Saving queues an item locally; clicking **Send to AI**
+   flushes the batch to the server. Your assistant applies each comment directly
+   to your source, then marks it resolved. Comments that need more thought (new
    dependencies, cross-cutting changes, or anything you flag "Plan this first")
    are parked in `.redline/redline-deferred.md` and a notice appears in the
    toolbar.
 
-With any MCP client, drive the loop directly with the raw tools: `bind_session`,
+Any MCP client drives the loop with the raw tools: `bind_session`,
 `wait_for_update`, and `list_comments`.
-
-> [!TIP]
-> In Claude Code, the `/mcp__redline__watch <id>` prompt binds the session and
-> runs the watch loop for you, dispatching a sub-agent per batch with no
-> approval step.
 
 ### Offline · remote preview or no local project
 
 There is no local server to reach, so you export the batch and hand it to any
 assistant.
 
-1. **Open the remote preview** and click the Redline toolbar icon to activate it.
+1. **Leave comments** on the remote preview the same way as online.
 
-2. **Leave comments** the same way as online.
-
-3. **Handoff.** Click **Handoff** to download a Markdown report of the batch.
+2. **Handoff.** Click **Handoff** to download a Markdown report of the batch.
    Give that report to any AI coding assistant to implement the changes.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -275,42 +253,63 @@ The server exposes 11 tools that any MCP client can call directly:
 
 ## FAQ
 
-**I sent comments but the assistant never picked them up.**
+<details>
+<summary><strong>I sent comments but the assistant never picked them up.</strong></summary>
+
 Comments only leave the browser when you click **Send to AI** in the toolbar.
 **Save** enqueues a comment locally, **Send** flushes the batch to the server.
-Make sure your assistant has bound the session (via `bind_session`, or the
-`/mcp__redline__watch <id>` prompt in Claude Code) so it is watching.
+Make sure your assistant has bound the session with `bind_session` so it is
+watching.
+</details>
 
-**The extension says it cannot reach the server.**
+<details>
+<summary><strong>The extension says it cannot reach the server.</strong></summary>
+
 The server listens on loopback only, so the page you are commenting on must be a
 `localhost` or `127.0.0.1` dev server, and your MCP client must be running in the
 project (starting the client launches the server). On a remote preview there is
 no local project to edit, so Redline keeps comments in the browser and you export
 them with **Handoff** instead.
+</details>
 
-**Port 7474 is already in use.**
+<details>
+<summary><strong>Port 7474 is already in use.</strong></summary>
+
 The server automatically falls back to 7475, then 7476, and the extension probes
 the same range, so a busy port usually just works. To pin a specific port, set
 `REDLINE_PORT` in the environment where your client launches the server.
+</details>
 
-**Can two projects run Redline at once?**
+<details>
+<summary><strong>Can two projects run Redline at once?</strong></summary>
+
 Not in v1. One project binds the port and the session at a time. Set a different
 `REDLINE_PORT` per project if you need to switch between them.
+</details>
 
-**Where is my data stored, and does anything leave my machine?**
+<details>
+<summary><strong>Where is my data stored, and does anything leave my machine?</strong></summary>
+
 Everything stays local. Queued comments live in the browser's `chrome.storage`;
 once sent, they are written to a gitignored `.redline/` folder at your project
 root. Nothing is sent to any remote server, and there is no analytics or
 telemetry. See [PRIVACY.md](./PRIVACY.md).
+</details>
 
-**When will the extension be on the Chrome Web Store?**
+<details>
+<summary><strong>When will the extension be on the Chrome Web Store?</strong></summary>
+
 The store listing is prepared and the release is coming soon. The
 [Getting started](#getting-started) section links to it.
+</details>
 
-**How do I report a security issue?**
+<details>
+<summary><strong>How do I report a security issue?</strong></summary>
+
 Please do not open a public issue. Use a
 [GitHub security advisory](https://github.com/pallandir/redline/security/advisories/new).
 Full details are in [SECURITY.md](./SECURITY.md).
+</details>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -339,12 +338,6 @@ Removing Redline is three independent steps; do the ones that apply to you.
 
 2. **Remove the MCP server registration.** Delete the `redline` entry from your
    assistant's MCP configuration.
-
-   > [!TIP]
-   > In Claude Code, remove it from the CLI:
-   > ```sh
-   > claude mcp remove redline
-   > ```
 
 3. **Delete the local comment store.** The server writes everything into a
    gitignored `.redline/` folder at your project root. Delete it to remove all
