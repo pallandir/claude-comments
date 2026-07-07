@@ -6,7 +6,7 @@ import type { CommentStore } from "./store.js";
 import { parseIncoming, parseRatingRequest } from "./validate.js";
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
-const SERVICE = "redline";
+const SERVICE = "northstar";
 
 export interface IngestServer {
   port: number;
@@ -58,14 +58,14 @@ function setCors(res: ServerResponse, origin: string | undefined): void {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Redline-Token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Northstar-Token");
 }
 
 // Verify the bearer token on state-changing / data endpoints. Routes exempt from
 // this check: OPTIONS, GET /health, POST /handshake (those are the probe/auth
 // path itself and must be reachable before a token is established).
 function authorized(req: IncomingMessage, broker: Broker): boolean {
-  const header = req.headers["x-redline-token"];
+  const header = req.headers["x-northstar-token"];
   const candidate = Array.isArray(header) ? header[0] : header;
   if (!candidate) return false;
   return broker.verifyToken(candidate);

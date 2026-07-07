@@ -27,12 +27,12 @@ function confineSourcePath(
   return source;
 }
 
-const STORE_DIR = ".redline";
+const STORE_DIR = ".northstar";
 const STORE_FILE = join(STORE_DIR, "design-comments.md");
 const STORE_JSON = join(STORE_DIR, "design-comments.json");
 const SHOTS_DIR = join(STORE_DIR, "design-shots");
-const DEFERRED_FILE = join(STORE_DIR, "redline-deferred.md");
-const RATINGS_FILE = join(STORE_DIR, "redline-ratings.json");
+const DEFERRED_FILE = join(STORE_DIR, "northstar-deferred.md");
+const RATINGS_FILE = join(STORE_DIR, "northstar-ratings.json");
 
 export class CommentStore {
   private readonly storeRoot: string;

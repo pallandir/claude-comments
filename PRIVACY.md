@@ -2,20 +2,20 @@
 
 _Last updated: 2026-06-17_
 
-Redline (the "Redline" browser extension and its companion MCP server) is a local
+Northstar (the "Northstar" browser extension and its companion MCP server) is a local
 developer tool. This policy explains what it does and does not do with data.
 
-## What Redline does not do
+## What Northstar does not do
 
 - It does **not** collect, store, or transmit any personal data.
 - It does **not** use analytics, tracking, advertising, or any third-party
   services.
 - It does **not** send any data to the developer or to any remote server.
 
-## What data Redline handles, and where it stays
+## What data Northstar handles, and where it stays
 
 When you leave a comment on a frontend (a local dev server or a remote preview),
-Redline captures only the information needed to describe that change: your comment
+Northstar captures only the information needed to describe that change: your comment
 text, a CSS selector and visible text for the element, a cropped screenshot of the
 element, the page URL, and, when available, a source file location. It captures
 nothing until you activate it on a tab and pick an element, and the screenshot is
@@ -23,7 +23,7 @@ cropped to that element, not the whole page. This data:
 
 - is stored locally in your browser (`chrome.storage`) while queued, and
 - is sent **only** to a server running on your own computer
-  (`http://127.0.0.1`), which writes it into your project's `.redline/` folder.
+  (`http://127.0.0.1`), which writes it into your project's `.northstar/` folder.
 
 None of it leaves your machine, even when the page itself is remote. The localhost
 server rejects requests from web pages, so only the extension can deliver comments
@@ -44,4 +44,4 @@ to it.
 ## Contact
 
 Questions about this policy: see the contact in `LICENSE.md` or open an issue at
-https://github.com/pallandir/redline/issues.
+https://github.com/pallandir/northstar/issues.

@@ -1,5 +1,5 @@
 {
-  "name": "@redline/extension",
+  "name": "@northstar/extension",
   "version": "1.0.0",
   "description": "Chromium MV3 extension to leave real-time comments on any interface and route them to a local AI coding assistant.",
   "license": "PolyForm-Noncommercial-1.0.0",
@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "package": "vite build && cd dist && zip -qr -FS ../redline-extension.zip . -x '*.DS_Store' '*.map' && cd ..",
+    "package": "vite build && cd dist && zip -qr -FS ../northstar-extension.zip . -x '*.DS_Store' '*.map' && cd ..",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"

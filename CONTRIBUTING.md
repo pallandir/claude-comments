@@ -1,6 +1,6 @@
-# Contributing to Redline
+# Contributing to Northstar
 
-Thanks for taking the time to look at Redline. It is a small project with a clear
+Thanks for taking the time to look at Northstar. It is a small project with a clear
 job, so contributions that keep it small and sharp are the ones most likely to
 land. Bug reports, doc fixes, and focused pull requests are all welcome.
 
@@ -17,8 +17,8 @@ repo uses npm workspaces, so a single install at the root covers every package.
 Clone the repo, install dependencies, and build both workspaces.
 
 ```sh
-git clone https://github.com/pallandir/redline.git
-cd redline
+git clone https://github.com/pallandir/northstar.git
+cd northstar
 npm install
 npm run build
 ```
@@ -41,13 +41,13 @@ The two halves run independently.
 For the server:
 
 ```sh
-npm run dev --workspace @redline/mcp-server
+npm run dev --workspace @northstar/mcp-server
 ```
 
 For the extension:
 
 ```sh
-npm run dev --workspace @redline/extension
+npm run dev --workspace @northstar/extension
 ```
 
 Then load `extension/dist` as an unpacked extension from `chrome://extensions`
@@ -80,7 +80,7 @@ pull requests move faster than large ones.
 
 ## A note on the license
 
-Redline is released under the PolyForm Noncommercial License 1.0.0. By
+Northstar is released under the PolyForm Noncommercial License 1.0.0. By
 contributing, you agree that your contribution is offered under the same terms.
 If you have a commercial use case, the contact for a commercial license is in
 [LICENSE.md](./LICENSE.md).

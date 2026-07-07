@@ -1,6 +1,6 @@
-# @redline/mcp-server
+# @northstar/mcp-server
 
-MCP server that ingests real-time UI comments from the Redline extension and
+MCP server that ingests real-time UI comments from the Northstar extension and
 exposes them to your AI coding assistant. It speaks standard MCP, so it works
 with any MCP-capable client; it has been tested with Claude Code.
 
@@ -12,16 +12,16 @@ It does two things in one process:
   solely from the extension (web-page origins and non-loopback hosts are
   rejected); payloads are validated against a strict schema.
 
-Comments are stored in `.redline/design-comments.md` and screenshots in
-`.redline/design-shots/`, relative to the working directory it is launched from.
-The `.redline/` folder is gitignored (the server also writes a `.gitignore`
+Comments are stored in `.northstar/design-comments.md` and screenshots in
+`.northstar/design-shots/`, relative to the working directory it is launched from.
+The `.northstar/` folder is gitignored (the server also writes a `.gitignore`
 inside it).
 
 ## Install
 
 ```bash
 # Register from npm (no clone needed), e.g. with Claude Code:
-claude mcp add redline -- npx -y @redline/mcp-server
+claude mcp add northstar -- npx -y @northstar/mcp-server
 ```
 
 ## Tools
@@ -47,7 +47,7 @@ there is no separate per-comment fetch.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Port discovery probe; returns `{ ok, service: "redline" }` so the extension only trusts a Redline server. |
+| `GET` | `/health` | Port discovery probe; returns `{ ok, service: "northstar" }` so the extension only trusts a Northstar server. |
 | `GET` | `/comments` | List stored comments (lets the extension show synced pins). |
 | `POST` | `/comments` | Ingest a new comment from the extension. |
 | `DELETE` | `/comments?url=<page>` | Delete stored comments for a page (omit `url` to clear all). |
@@ -56,12 +56,12 @@ there is no separate per-comment fetch.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `REDLINE_PORT` | 7474 | Preferred ingest port (falls back to 7475/7476). |
-| `REDLINE_ROOT` | `process.cwd()` | Where the store is written. |
+| `NORTHSTAR_PORT` | 7474 | Preferred ingest port (falls back to 7475/7476). |
+| `NORTHSTAR_ROOT` | `process.cwd()` | Where the store is written. |
 
 ## Develop
 
 ```bash
-npm run dev --workspace @redline/mcp-server     # tsup watch
-npm run build --workspace @redline/mcp-server
+npm run dev --workspace @northstar/mcp-server     # tsup watch
+npm run build --workspace @northstar/mcp-server
 ```

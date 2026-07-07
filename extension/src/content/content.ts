@@ -12,12 +12,12 @@ import { openColorPanel, openTextEditor } from "./tools.js";
 
 declare global {
   interface Window {
-    __redlineLoaded?: boolean;
+    __northstarLoaded?: boolean;
   }
 }
 
-if (!window.__redlineLoaded) {
-  window.__redlineLoaded = true;
+if (!window.__northstarLoaded) {
+  window.__northstarLoaded = true;
   init();
 }
 

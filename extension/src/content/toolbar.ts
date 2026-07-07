@@ -288,7 +288,7 @@ function setupPanel(
     ? root
       ? short(root)
       : "Waiting for your assistant…"
-    : "Start Redline in your editor.";
+    : "Start Northstar in your editor.";
 
   const tip = document.createElement("div");
   tip.className = "cc-setup-hint";
@@ -330,13 +330,13 @@ function watchRow(sessionId: string | null): HTMLElement {
   const cmdRow = document.createElement("div");
   cmdRow.className = "cc-setup-cmd cc-setup-id";
   const cmdCode = document.createElement("code");
-  cmdCode.textContent = sessionId ? `/mcp__redline__watch ${shortId(sessionId)}` : "loading…";
+  cmdCode.textContent = sessionId ? `/mcp__northstar__watch ${shortId(sessionId)}` : "loading…";
   const copy = document.createElement("button");
   copy.type = "button";
   copy.className = "cc-copy";
   copy.textContent = "Copy";
   copy.addEventListener("click", () => {
-    void navigator.clipboard?.writeText(sessionId ? `/mcp__redline__watch ${sessionId}` : "");
+    void navigator.clipboard?.writeText(sessionId ? `/mcp__northstar__watch ${sessionId}` : "");
     copy.textContent = "Copied";
     window.setTimeout(() => {
       copy.textContent = "Copy";

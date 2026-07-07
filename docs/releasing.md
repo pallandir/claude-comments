@@ -1,6 +1,6 @@
 # Releasing
 
-Redline ships two artifacts on their own cadence: the `@redline/mcp-server` npm
+Northstar ships two artifacts on their own cadence: the `@northstar/mcp-server` npm
 package and the browser extension zip for the Chrome Web Store. This page is the
 checklist for cutting a release of each.
 
@@ -25,7 +25,7 @@ release path is a git tag.
 
 ### One-time setup
 
-1. Make sure the `@redline` scope exists on npm and the publishing account owns
+1. Make sure the `@northstar` scope exists on npm and the publishing account owns
    it. `publishConfig.access` is already `public`, which is required for a scoped
    public package.
 2. Add an automation `NPM_TOKEN` as a repository secret in GitHub. The workflow
@@ -44,7 +44,7 @@ release path is a git tag.
    ```
 
 The workflow checks out the repo, builds the server, copies the root `LICENSE.md`
-into the package, and runs `npm publish --workspace @redline/mcp-server` with
+into the package, and runs `npm publish --workspace @northstar/mcp-server` with
 provenance. You can also run it manually from the Actions tab (`workflow_dispatch`).
 
 ### Verify before tagging
@@ -52,7 +52,7 @@ provenance. You can also run it manually from the Actions tab (`workflow_dispatc
 Inspect the exact tarball contents without publishing:
 
 ```sh
-npm pack --dry-run --workspace @redline/mcp-server
+npm pack --dry-run --workspace @northstar/mcp-server
 ```
 
 The file list should be `dist/`, `README.md`, `LICENSE.md`, and `package.json`,
@@ -68,15 +68,15 @@ works for both the Chrome Web Store and Firefox AMO.
 1. Build and package in one step:
 
    ```sh
-   npm run package --workspace @redline/extension
+   npm run package --workspace @northstar/extension
    ```
 
-   This produces `extension/redline-extension.zip`.
+   This produces `extension/northstar-extension.zip`.
 
 2. Verify the zip is a coherent build before you upload it:
 
    ```sh
-   unzip -l extension/redline-extension.zip
+   unzip -l extension/northstar-extension.zip
    ```
 
    Confirm it contains `manifest.json` at the root, all four icons, the service

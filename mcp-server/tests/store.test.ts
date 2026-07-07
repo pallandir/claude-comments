@@ -9,7 +9,7 @@ import type { IncomingComment } from "../src/types.js";
 let root: string;
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "redline-store-"));
+  root = await mkdtemp(join(tmpdir(), "northstar-store-"));
 });
 
 afterEach(async () => {

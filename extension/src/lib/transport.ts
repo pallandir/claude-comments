@@ -7,9 +7,9 @@ import type {
   SourceLocation,
 } from "../types.js";
 
-const QUEUE_KEY = "redline-queue";
-const SESSION_KEY = "redline-session-id";
-const SESSION_TOKEN_KEY = "redline-session-token";
+const QUEUE_KEY = "northstar-queue";
+const SESSION_KEY = "northstar-session-id";
+const SESSION_TOKEN_KEY = "northstar-session-token";
 const PORTS = [7474, 7475, 7476];
 const PROBE_TIMEOUT_MS = 400;
 const SERVER_CACHE_TTL_MS = 30_000;
@@ -83,7 +83,7 @@ function request(
   token?: string,
 ): Promise<Response> {
   const headers: Record<string, string> = {};
-  if (token) headers["X-Redline-Token"] = token;
+  if (token) headers["X-Northstar-Token"] = token;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   return fetch(api(port, path), {
     method,
@@ -203,7 +203,7 @@ async function probe(port: number): Promise<ServerCandidate | null> {
     const res = await fetch(api(port, "/health"), { signal: ctrl.signal });
     if (!res.ok) return null;
     const body = (await res.json()) as Health;
-    if (body.service !== "redline" || !body.root || !body.startedAt) return null;
+    if (body.service !== "northstar" || !body.root || !body.startedAt) return null;
     return {
       port,
       root: body.root,

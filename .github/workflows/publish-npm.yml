@@ -19,8 +19,8 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
       - run: npm ci
-      - run: npm run build --workspace @redline/mcp-server
+      - run: npm run build --workspace @northstar/mcp-server
       - run: cp LICENSE.md mcp-server/LICENSE.md
-      - run: npm publish --workspace @redline/mcp-server
+      - run: npm publish --workspace @northstar/mcp-server
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

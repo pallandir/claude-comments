@@ -3,26 +3,26 @@
 <br />
 <div align="center">
   <a href="#">
-    <img src="./public-assets/redline.png" alt="Redline logo" width="280" height="280">
+    <img src="./public-assets/northstar.png" alt="Northstar logo" width="280" height="280">
   </a>
-  <h3 align="center">Redline</h3>
+  <h3 align="center">Northstar</h3>
 
   <p align="center">
     Click any element on a running frontend, leave a comment, and let your
     AI coding assistant implement the change directly in source.
     <br />
     <br />
-    <a href="https://github.com/pallandir/redline/issues">Report a bug</a>
+    <a href="https://github.com/pallandir/northstar/issues">Report a bug</a>
     ·
-    <a href="https://github.com/pallandir/redline/issues">Request a feature</a>
+    <a href="https://github.com/pallandir/northstar/issues">Request a feature</a>
   </p>
 
   <p align="center">
     <a href="./LICENSE.md">
       <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue" alt="License: PolyForm Noncommercial">
     </a>
-    <a href="https://www.npmjs.com/package/@redline/mcp-server">
-      <img src="https://img.shields.io/npm/v/%40redline%2Fmcp-server" alt="npm version">
+    <a href="https://www.npmjs.com/package/@northstar/mcp-server">
+      <img src="https://img.shields.io/npm/v/%40northstar%2Fmcp-server" alt="npm version">
     </a>
     <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node >= 20">
     <img src="https://img.shields.io/badge/Model%20Context%20Protocol-server-blueviolet" alt="MCP server">
@@ -31,7 +31,7 @@
 
 ## Table of contents
 
-- [What is Redline](#what-is-redline)
+- [What is Northstar](#what-is-northstar)
 - [How it works](#how-it-works)
 - [Prerequisites](#prerequisites)
 - [Getting started](#getting-started)
@@ -45,21 +45,21 @@
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## What is Redline
+## What is Northstar
 
-**Redline** is a Chromium extension paired with an MCP server. Click any element
+**Northstar** is a Chromium extension paired with an MCP server. Click any element
 on a running frontend, local or a remote preview, leave a structured comment
 anchored to it, and have your AI coding assistant pick up the list and implement
 the changes directly against your real source files. Nothing is sent to a remote
 backend; every comment travels over loopback between the browser and a server
 running on your own machine.
 
-### Why "Redline"?
+### Why "Northstar"?
 
-In editorial, architectural, and engineering practice, "redlining" means marking
-up a draft in red ink with the corrections that must be made before it ships.
-That is exactly what this tool does to a running UI: you redline the interface,
-and the assistant closes the marks.
+A north star is the one point in the sky that never moves, the thing you steer by
+when everything else is drifting. Northstar makes your design intent that fixed
+point: you mark where the UI should go, and your assistant moves the code until it
+gets there.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -69,8 +69,8 @@ and the assistant closes the marks.
 flowchart TD
     A["Browser extension\n(Chromium MV3)"]
     B["MCP server\n(127.0.0.1:7474)"]
-    C["Comment store\n(.redline/)"]
-    D["/mcp__redline__watch\nwatch loop"]
+    C["Comment store\n(.northstar/)"]
+    D["/mcp__northstar__watch\nwatch loop"]
     E["Sub-agent\nedits source"]
 
     A -- "POST /comments\n(loopback only)" --> B
@@ -102,7 +102,7 @@ For a deeper look at the architecture and the message flows, see the
 | An MCP-capable AI coding assistant | reads comments and edits your source (Claude Code, Cursor, Windsurf, or any MCP client) | Yes |
 | Chromium browser (Chrome, Edge, Brave, Arc) | extension | Yes |
 | Framework inspector plugin | precise `file:line:column` mapping | Yes |
-| [`redline-design-score` skill](./plugin/skills/redline-design-score/SKILL.md) | purpose-fit page scoring | Optional |
+| [`northstar-design-score` skill](./plugin/skills/northstar-design-score/SKILL.md) | purpose-fit page scoring | Optional |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -117,7 +117,7 @@ There is nothing to install ahead of time. `npx` fetches and runs the server on
 demand, so you can start it directly:
 
 ```sh
-npx -y @redline/mcp-server
+npx -y @northstar/mcp-server
 ```
 
 To wire it into your assistant, add the same command to your MCP configuration.
@@ -126,9 +126,9 @@ Any MCP-capable client can launch it on demand via `npx`:
 ```json
 {
   "mcpServers": {
-    "redline": {
+    "northstar": {
       "command": "npx",
-      "args": ["-y", "@redline/mcp-server"]
+      "args": ["-y", "@northstar/mcp-server"]
     }
   }
 }
@@ -139,7 +139,7 @@ Any MCP-capable client can launch it on demand via `npx`:
 ### Step 2 · Install the browser extension
 
 The extension is required, it is what captures your comments on the page.
-Install Redline from the Chrome Web Store and pin it to your toolbar. It runs in
+Install Northstar from the Chrome Web Store and pin it to your toolbar. It runs in
 any Chromium browser (Chrome, Edge, Brave, Arc).
 
 [**Add to Chrome →**](https://chrome.google.com/webstore) *(store listing coming soon)*
@@ -149,9 +149,9 @@ any Chromium browser (Chrome, Edge, Brave, Arc).
 ### Step 3 · Connect the extension to your assistant
 
 Open your frontend on a `localhost` dev server, with your assistant running in
-the same repo, and click the Redline toolbar icon to activate it on that tab.
+the same repo, and click the Northstar toolbar icon to activate it on that tab.
 Copy the session id from the toolbar and have your assistant call `bind_session`
-with it. The session binds and Redline starts watching for comments.
+with it. The session binds and Northstar starts watching for comments.
 
 ---
 
@@ -162,8 +162,8 @@ you send is applied directly to your source by your assistant. See
 [Usage](#usage) for the full tour.
 
 > [!IMPORTANT]
-> The comment store (`.redline/design-comments.md`) and screenshots
-> (`.redline/design-shots/`) are written to the project root where your MCP
+> The comment store (`.northstar/design-comments.md`) and screenshots
+> (`.northstar/design-shots/`) are written to the project root where your MCP
 > client is running and are gitignored. Keep them out of version control.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -171,7 +171,7 @@ you send is applied directly to your source by your assistant. See
 ## Usage
 
 [Getting started](#getting-started) covers the one-time setup. Day to day,
-Redline runs in one of two modes depending on where your frontend lives.
+Northstar runs in one of two modes depending on where your frontend lives.
 
 ### Online · localhost dev server
 
@@ -186,7 +186,7 @@ Your assistant runs in the repo and comments flow to it live over loopback.
    flushes the batch to the server. Your assistant applies each comment directly
    to your source, then marks it resolved. Comments that need more thought (new
    dependencies, cross-cutting changes, or anything you flag "Plan this first")
-   are parked in `.redline/redline-deferred.md` and a notice appears in the
+   are parked in `.northstar/northstar-deferred.md` and a notice appears in the
    toolbar.
 
 Any MCP client drives the loop with the raw tools: `bind_session`,
@@ -216,14 +216,14 @@ Add the matching plugin to your dev build:
 | Framework | Plugin | Notes |
 |---|---|---|
 | React / Next.js | [`react-dev-inspector`](https://github.com/zthxxx/react-dev-inspector) | |
-| Vue / Nuxt | [`vite-plugin-vue-inspector`](https://github.com/webfansplz/vite-plugin-vue-inspector) | Set `Inspector({ cleanHtml: false })`. The default strips `data-v-inspector` from the DOM, so Redline cannot read it. |
+| Vue / Nuxt | [`vite-plugin-vue-inspector`](https://github.com/webfansplz/vite-plugin-vue-inspector) | Set `Inspector({ cleanHtml: false })`. The default strips `data-v-inspector` from the DOM, so Northstar cannot read it. |
 | Svelte / SvelteKit | Svelte Inspector (built into `@sveltejs/vite-plugin-svelte`) | |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Compatibility
 
-Redline's MCP server speaks standard MCP over stdio and works with any
+Northstar's MCP server speaks standard MCP over stdio and works with any
 MCP-capable AI coding assistant, Claude Code, Cursor, Windsurf, and similar
 clients all connect the same way. Any client that can call the tools below can
 drive the full flow.
@@ -268,7 +268,7 @@ watching.
 The server listens on loopback only, so the page you are commenting on must be a
 `localhost` or `127.0.0.1` dev server, and your MCP client must be running in the
 project (starting the client launches the server). On a remote preview there is
-no local project to edit, so Redline keeps comments in the browser and you export
+no local project to edit, so Northstar keeps comments in the browser and you export
 them with **Handoff** instead.
 </details>
 
@@ -277,21 +277,21 @@ them with **Handoff** instead.
 
 The server automatically falls back to 7475, then 7476, and the extension probes
 the same range, so a busy port usually just works. To pin a specific port, set
-`REDLINE_PORT` in the environment where your client launches the server.
+`NORTHSTAR_PORT` in the environment where your client launches the server.
 </details>
 
 <details>
-<summary><strong>Can two projects run Redline at once?</strong></summary>
+<summary><strong>Can two projects run Northstar at once?</strong></summary>
 
 Not in v1. One project binds the port and the session at a time. Set a different
-`REDLINE_PORT` per project if you need to switch between them.
+`NORTHSTAR_PORT` per project if you need to switch between them.
 </details>
 
 <details>
 <summary><strong>Where is my data stored, and does anything leave my machine?</strong></summary>
 
 Everything stays local. Queued comments live in the browser's `chrome.storage`;
-once sent, they are written to a gitignored `.redline/` folder at your project
+once sent, they are written to a gitignored `.northstar/` folder at your project
 root. Nothing is sent to any remote server, and there is no analytics or
 telemetry. See [PRIVACY.md](./PRIVACY.md).
 </details>
@@ -307,7 +307,7 @@ The store listing is prepared and the release is coming soon. The
 <summary><strong>How do I report a security issue?</strong></summary>
 
 Please do not open a public issue. Use a
-[GitHub security advisory](https://github.com/pallandir/redline/security/advisories/new).
+[GitHub security advisory](https://github.com/pallandir/northstar/security/advisories/new).
 Full details are in [SECURITY.md](./SECURITY.md).
 </details>
 
@@ -329,22 +329,22 @@ See [SECURITY.md](./SECURITY.md) for the full threat model and
 
 ## Uninstall
 
-Removing Redline is three independent steps; do the ones that apply to you.
+Removing Northstar is three independent steps; do the ones that apply to you.
 
 1. **Remove the browser extension.** Open `chrome://extensions`, find the
-   Redline card, and click **Remove**. In Firefox-family builds, use
+   Northstar card, and click **Remove**. In Firefox-family builds, use
    `about:addons`. This also clears the extension's local queue and stored
    session token.
 
-2. **Remove the MCP server registration.** Delete the `redline` entry from your
+2. **Remove the MCP server registration.** Delete the `northstar` entry from your
    assistant's MCP configuration.
 
 3. **Delete the local comment store.** The server writes everything into a
-   gitignored `.redline/` folder at your project root. Delete it to remove all
+   gitignored `.northstar/` folder at your project root. Delete it to remove all
    comments, deferrals, ratings, and screenshots:
 
    ```sh
-   rm -rf .redline
+   rm -rf .northstar
    ```
 
    Nothing lives outside your machine, so there is no account or remote data to

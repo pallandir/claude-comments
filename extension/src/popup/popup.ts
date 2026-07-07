@@ -56,7 +56,7 @@ function render(app: HTMLElement, state: State): void {
 
   const header = el("div", "rl-header");
   const wordmark = el("span", "rl-wordmark");
-  wordmark.textContent = "Redline";
+  wordmark.textContent = "Northstar";
   const badge = el("span", watching ? "rl-badge rl-badge--live" : "rl-badge");
   badge.textContent = watching ? "● Watching" : isActive ? "Active" : "";
   header.append(wordmark, badge);

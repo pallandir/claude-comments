@@ -18,7 +18,7 @@ First public release.
   lengths, screenshot data-URL format), so a malformed body is a clean `400`
   and can no longer crash the store.
 - **`/health` now identifies the service**; the extension only trusts a port
-  that reports `service: "redline"`.
+  that reports `service: "northstar"`.
 - **Zero standing page access.** The extension declares no content scripts and no
   web-page host permissions. The overlay is injected into a single tab on demand
   via `chrome.scripting` under the `activeTab` grant, only after the user clicks
@@ -42,7 +42,7 @@ First public release.
 
 ### Added
 
-- **Comment on any frontend, not just localhost.** Activate Redline on any site,
+- **Comment on any frontend, not just localhost.** Activate Northstar on any site,
   a local dev server or a remote preview, while all captured data still travels
   only to the loopback listener and the assistant edits only the local repo.
 - **Watch loop over 11 MCP tools.** `bind_session` / `unbind_session` claim and
@@ -52,7 +52,7 @@ First public release.
   `list_deferred` close or park work, and `clear_resolved` prunes finished
   entries. Comments flush only when the user clicks Send to AI.
 - **Purpose-fit page scoring.** `list_rating_requests` and `submit_rating`, plus
-  the bundled `redline-design-score` skill, rate a page screenshot for fitness to
+  the bundled `northstar-design-score` skill, rate a page screenshot for fitness to
   its own purpose (ui, ux, coherence) rather than an absolute award-site bar.
 - **Figma-style toolbar.** A draggable in-page toolbar with Select, Comment,
   Color, and Text tools, rendered in a closed shadow DOM, replacing the earlier

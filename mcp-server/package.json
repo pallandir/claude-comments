@@ -1,17 +1,17 @@
 {
-  "name": "@redline/mcp-server",
+  "name": "@northstar/mcp-server",
   "version": "1.0.0",
-  "description": "MCP server that ingests real-time UI comments from the Redline extension and exposes them to an AI coding assistant.",
+  "description": "MCP server that ingests real-time UI comments from the Northstar extension and exposes them to an AI coding assistant.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
-  "homepage": "https://github.com/pallandir/redline#readme",
+  "homepage": "https://github.com/pallandir/northstar#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pallandir/redline.git",
+    "url": "git+https://github.com/pallandir/northstar.git",
     "directory": "mcp-server"
   },
   "bugs": {
-    "url": "https://github.com/pallandir/redline/issues"
+    "url": "https://github.com/pallandir/northstar/issues"
   },
   "keywords": [
     "mcp",
@@ -24,7 +24,7 @@
     "node": ">=20"
   },
   "bin": {
-    "redline-mcp": "dist/index.js"
+    "northstar-mcp": "dist/index.js"
   },
   "files": ["dist", "LICENSE.md", "README.md"],
   "publishConfig": {

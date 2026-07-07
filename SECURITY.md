@@ -1,6 +1,6 @@
 # Security
 
-Redline is a developer tool that runs entirely on your machine. You can leave
+Northstar is a developer tool that runs entirely on your machine. You can leave
 comments on any running frontend, local or a remote preview, but everything you
 capture stays local: the only thing that crosses a trust boundary is a comment
 you explicitly created, and it only ever travels to the loopback listener owned
@@ -56,6 +56,6 @@ by your own AI coding assistant.
 ## Reporting a vulnerability
 
 Please do not open a public issue for security problems. Report privately via a
-[GitHub security advisory](https://github.com/pallandir/redline/security/advisories/new)
+[GitHub security advisory](https://github.com/pallandir/northstar/security/advisories/new)
 or by contacting the maintainer through the address in `LICENSE.md`. We aim to
 acknowledge reports within a few days.

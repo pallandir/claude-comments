@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-Redline ships two published artifacts: the `@redline/mcp-server` npm package and
+Northstar ships two published artifacts: the `@northstar/mcp-server` npm package and
 the browser extension bundle. The runtime dependencies compiled into those
 artifacts are listed below, followed by the attribution for the design-scoring
 rubric.
@@ -21,7 +21,7 @@ Symbols icons, which are themselves licensed under Apache-2.0.
 
 ## wondelai-top-design
 
-The Awwwards-style scoring rubric in `plugin/skills/redline-design-score/SKILL.md` is adapted
+The Awwwards-style scoring rubric in `plugin/skills/northstar-design-score/SKILL.md` is adapted
 from the `wondelai-top-design` skill.
 
 - **Author:** Wondel.ai

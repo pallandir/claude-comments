@@ -1,6 +1,6 @@
 # Architecture
 
-Redline is two shipped artifacts (a browser extension and an MCP server) plus the
+Northstar is two shipped artifacts (a browser extension and an MCP server) plus the
 AI assistant that drives them and the on-disk store they share. The extension and
 the assistant never talk directly; the MCP server sits in the middle and bridges
 two transports, HTTP on one side and MCP over stdio on the other.
@@ -30,7 +30,7 @@ flowchart TB
       Mcp --> Store
     end
 
-    Disk[("<br/>.redline/<br/>comments, shots,<br/>deferred, ratings<br/>")]
+    Disk[("<br/>.northstar/<br/>comments, shots,<br/>deferred, ratings<br/>")]
     Assistant["AI coding assistant<br/>(Claude Code)"]
 
     Transport -- "HTTP over loopback" --> Http
@@ -80,7 +80,7 @@ One process exposes two faces at once.
 
 ### Shared store
 
-Everything the server persists lives under a single gitignored `.redline/` folder
+Everything the server persists lives under a single gitignored `.northstar/` folder
 at the project root: the comment store (`design-comments.md` and `.json`), the
 cropped screenshots (`design-shots/`), the deferred list, and the ratings file.
 The server also writes a `.gitignore` inside that folder so it can never be

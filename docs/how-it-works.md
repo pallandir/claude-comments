@@ -1,13 +1,13 @@
-# How Redline works
+# How Northstar works
 
-Redline connects three things that normally cannot talk to each other: a web page
+Northstar connects three things that normally cannot talk to each other: a web page
 in your browser, a comment store on your disk, and an AI coding assistant running
 in your terminal. You mark up the running UI, and the assistant closes the marks
 in the real source files.
 
 ## The short version
 
-You click the Redline icon to turn it on for the current tab. A small floating
+You click the Northstar icon to turn it on for the current tab. A small floating
 toolbar appears. You point at an element, leave a note (or recolor it, or edit
 its text), and the note is pinned to that element. When you are ready, you click
 Send to AI. In your editor you paste a one-line watch command once, and from then
@@ -20,12 +20,12 @@ listens only on `127.0.0.1`.
 
 ```mermaid
 flowchart TD
-    A["Click the Redline icon<br/>(activate on this tab)"] --> B["Point at an element<br/>and leave a comment"]
+    A["Click the Northstar icon<br/>(activate on this tab)"] --> B["Point at an element<br/>and leave a comment"]
     B --> C["Comment saved to the<br/>browser queue"]
     C --> D{"Is the page on<br/>localhost?"}
     D -- "Yes" --> E["Click Send to AI<br/>flush the batch"]
     D -- "No (remote preview)" --> F["Use Handoff to export<br/>a Markdown report"]
-    E --> G["Server writes the batch<br/>into .redline/"]
+    E --> G["Server writes the batch<br/>into .northstar/"]
     G --> H["Watch loop wakes,<br/>reads the batch"]
     H --> I["Sub-agent edits the<br/>real source files"]
     I --> J{"Clear enough<br/>to implement?"}
@@ -41,7 +41,7 @@ assistant find the right code even when the selector alone would be ambiguous.
 
 ## Local pages versus remote previews
 
-Redline behaves differently depending on where the page is served, because it
+Northstar behaves differently depending on where the page is served, because it
 only ever edits a local repository.
 
 ```mermaid
@@ -56,7 +56,7 @@ flowchart LR
 
 On a `localhost` dev server the assistant has a real repo to change, so comments
 flow straight to the server and into the watch loop. On a remote preview there is
-no local project to edit, so Redline keeps the comments in the browser and hands
+no local project to edit, so Northstar keeps the comments in the browser and hands
 them off as a Markdown file you can give to any assistant.
 
 ## The watch loop
@@ -70,7 +70,7 @@ message order.
 
 ## Scoring a page
 
-Alongside comments, Redline can rate a whole page. You capture the page, the
+Alongside comments, Northstar can rate a whole page. You capture the page, the
 server records a rating request, and the assistant scores it for how well it
 serves its own purpose (a dashboard is judged as a dashboard, not against a
 cinematic landing page). The score comes back as ui, ux, and coherence numbers

@@ -1,6 +1,6 @@
 # Flows
 
-These sequence diagrams show the message order for the four things Redline does:
+These sequence diagrams show the message order for the four things Northstar does:
 pairing a session and watching, sending a batch, resolving or deferring work, and
 scoring a page. The participants are the toolbar (in the content script), the
 extension transport layer, the server's HTTP listener, the broker, the comment
@@ -21,7 +21,7 @@ sequenceDiagram
     participant B as Broker
 
     T->>T: generate session id
-    U->>A: paste /mcp__redline__watch <id>
+    U->>A: paste /mcp__northstar__watch <id>
     A->>M: bind_session(id)
     M->>B: claim ownership, store token
     M-->>A: bound, storeRoot, watchProtocol

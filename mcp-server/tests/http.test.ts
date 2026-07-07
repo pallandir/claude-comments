@@ -52,11 +52,11 @@ function loopbackHost(): string {
   return `127.0.0.1:${server.port}`;
 }
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return { Host: loopbackHost(), Origin: ext, "X-Redline-Token": TEST_TOKEN, ...extra };
+  return { Host: loopbackHost(), Origin: ext, "X-Northstar-Token": TEST_TOKEN, ...extra };
 }
 
 before(async () => {
-  root = await mkdtemp(join(tmpdir(), "redline-http-"));
+  root = await mkdtemp(join(tmpdir(), "northstar-http-"));
   server = await startIngestServer(new CommentStore(root), [0], () => {});
   server.broker.bindSession(TEST_TOKEN);
 });
@@ -71,7 +71,7 @@ test("/health identifies the service to the extension", async () => {
   assert.equal(res.status, 200);
   const body = JSON.parse(res.body);
   assert.equal(body.ok, true);
-  assert.equal(body.service, "redline");
+  assert.equal(body.service, "northstar");
   assert.equal(body.root, root);
   assert.equal(typeof body.startedAt, "string");
   assert.equal(typeof body.pid, "number");
@@ -117,7 +117,7 @@ test("data endpoints return 401 with a wrong token", async () => {
       Host: loopbackHost(),
       Origin: ext,
       "Content-Type": "application/json",
-      "X-Redline-Token": "wrong",
+      "X-Northstar-Token": "wrong",
     },
     validBody,
   );
@@ -172,7 +172,7 @@ test("/handshake returns valid HMAC when token is bound", async () => {
 });
 
 test("/handshake returns 401 when no token is bound", async () => {
-  const root2 = await mkdtemp(join(tmpdir(), "redline-http2-"));
+  const root2 = await mkdtemp(join(tmpdir(), "northstar-http2-"));
   const unbound = await startIngestServer(new CommentStore(root2), [0], () => {});
   try {
     const res = await new Promise<Reply>((resolve, reject) => {

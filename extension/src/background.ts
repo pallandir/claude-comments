@@ -91,7 +91,7 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
         const dataUrl = await captureRegion(sender.tab?.windowId, message.rect, message.dpr);
         return { ok: true, dataUrl };
       } catch (err) {
-        console.warn("[redline] capture failed:", (err as Error).message);
+        console.warn("[northstar] capture failed:", (err as Error).message);
         return { ok: true, dataUrl: null };
       }
     }

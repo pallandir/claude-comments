@@ -1,4 +1,4 @@
-# @redline/extension
+# @northstar/extension
 
 Chromium MV3 extension to leave comments on any frontend.
 
@@ -30,8 +30,8 @@ find the code by search.
 ## Develop
 
 ```bash
-npm run dev --workspace @redline/extension      # vite + HMR
-npm run build --workspace @redline/extension    # outputs dist/
+npm run dev --workspace @northstar/extension      # vite + HMR
+npm run build --workspace @northstar/extension    # outputs dist/
 ```
 
 Load `extension/dist` via `chrome://extensions` → Developer mode → Load unpacked.

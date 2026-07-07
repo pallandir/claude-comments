@@ -1,12 +1,12 @@
 # Chrome Web Store listing
 
-Reference copy for submitting the Redline extension. Build the upload artifact
-with `npm run package --workspace @redline/extension` (produces
-`extension/redline-extension.zip` with the manifest at the zip root).
+Reference copy for submitting the Northstar extension. Build the upload artifact
+with `npm run package --workspace @northstar/extension` (produces
+`extension/northstar-extension.zip` with the manifest at the zip root).
 
 ## Single purpose
 
-Redline lets a developer leave real-time, element-anchored comments on a running
+Northstar lets a developer leave real-time, element-anchored comments on a running
 frontend and delivers them to an AI coding assistant on the same machine so it
 can act on the real source files. The extension's single purpose is annotating a
 web UI for that local assistant.
@@ -18,7 +18,7 @@ assistant.
 
 ## Detailed description
 
-Redline is a Figma-style dev toolbar for the frontend you are building, whether
+Northstar is a Figma-style dev toolbar for the frontend you are building, whether
 it runs on `localhost` or a remote preview. Click an element to comment on it,
 recolor text or background live, or edit copy inline. Each item is pinned to its
 element with a cropped screenshot and a stable selector, and (when a framework
@@ -37,7 +37,7 @@ device, even when the page itself is remote.
 ## Permission justifications
 
 - **activeTab** — grants access to the current tab only when the user clicks the
-  toolbar button, so Redline can read the element being commented on and capture
+  toolbar button, so Northstar can read the element being commented on and capture
   a cropped screenshot of it. The extension has no access to any page before that
   click, and the access ends when the tab navigates.
 - **scripting** — injects the commenting toolbar into that one active tab on
@@ -60,4 +60,4 @@ device, even when the page itself is remote.
 
 ## Privacy policy URL
 
-https://github.com/pallandir/redline/blob/main/PRIVACY.md
+https://github.com/pallandir/northstar/blob/main/PRIVACY.md

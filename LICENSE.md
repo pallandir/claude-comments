@@ -1,6 +1,6 @@
 # License
 
-**Redline** is licensed under the **PolyForm Noncommercial License 1.0.0**.
+**Northstar** is licensed under the **PolyForm Noncommercial License 1.0.0**.
 
 You may use, copy, modify, and share this software **for noncommercial purposes
 only**, as defined in the terms below. Any commercial use requires a separate

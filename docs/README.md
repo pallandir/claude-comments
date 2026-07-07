@@ -1,6 +1,6 @@
-# Redline documentation
+# Northstar documentation
 
-This folder explains how Redline is put together and how a comment travels from a
+This folder explains how Northstar is put together and how a comment travels from a
 click in the browser to a change in your source code. It is diagrams and prose
 only, no source listings. Read the pages in this order:
 

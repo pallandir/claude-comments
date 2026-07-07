@@ -1,6 +1,6 @@
 ---
-name: redline-design-score
-description: 'Score a web page screenshot for fitness to its own purpose (not an absolute award-site bar) and submit the Redline ui/ux/coherence rating (0-100). Invoke when list_rating_requests returns pending items, then call submit_rating with the result.'
+name: northstar-design-score
+description: 'Score a web page screenshot for fitness to its own purpose (not an absolute award-site bar) and submit the Northstar ui/ux/coherence rating (0-100). Invoke when list_rating_requests returns pending items, then call submit_rating with the result.'
 license: MIT
 metadata:
   author: pallandir
@@ -8,13 +8,13 @@ metadata:
   attribution: 'Scoring rubric adapted from wondelai-top-design by Wondel.ai (MIT). See THIRD_PARTY_LICENSES.md.'
 ---
 
-# Redline Design Score
+# Northstar Design Score
 
-Evaluate a page screenshot against a rubric adapted from award-site craft criteria, but scored **relative to what the page is trying to be**, and produce Redline's three rating dimensions (ui, ux, coherence) plus a composite score, all on a 0–100 integer scale.
+Evaluate a page screenshot against a rubric adapted from award-site craft criteria, but scored **relative to what the page is trying to be**, and produce Northstar's three rating dimensions (ui, ux, coherence) plus a composite score, all on a 0–100 integer scale.
 
 ## When to use
 
-This skill is designed to run inside a **disposable sub-agent** spawned by the Redline watch-mode session. The parent session delegates each pending rating to a fresh sub-agent using the `ratingSubAgentPrompt` returned by `bind_session`, so scoring stays out of the main conversation. The sub-agent calls `list_rating_requests`, applies this rubric, calls `submit_rating`, then exits.
+This skill is designed to run inside a **disposable sub-agent** spawned by the Northstar watch-mode session. The parent session delegates each pending rating to a fresh sub-agent using the `ratingSubAgentPrompt` returned by `bind_session`, so scoring stays out of the main conversation. The sub-agent calls `list_rating_requests`, applies this rubric, calls `submit_rating`, then exits.
 
 If invoked directly (not via a sub-agent), apply the same procedure: when `list_rating_requests` returns a pending rating request, load the screenshot at the path it reports, evaluate it against the rubric below, then call `submit_rating`.
 
@@ -64,7 +64,7 @@ The bands below describe the *craft ceiling* for each dimension (what 76–100 l
 |---|---|
 | 76–100: Every micro-detail deliberate — focus states, loading, empty states | Interactive elements have appropriate states (hover/focus/active) where the UI implies interactivity; empty/loading/error states are handled, not blank. Penalize: default cursors on custom controls, missing focus indicators, obviously unhandled states. |
 
-## Mapping to Redline dimensions
+## Mapping to Northstar dimensions
 
 ```
 ui        = round(Typography × 0.4 + Composition × 0.4 + Color × 0.2)

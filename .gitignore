@@ -10,7 +10,7 @@ build/
 .vite/
 
 # Packaged release artifacts
-redline-extension*.zip
+northstar-extension*.zip
 # Copied into the package at pack/publish time by the prepack script
 mcp-server/LICENSE.md
 
@@ -35,8 +35,8 @@ yarn-error.log*
 .vscode/
 *.swp
 
-# Redline comment store (local only, never committed; server writes .gitignore inside it too)
-.redline/
+# Northstar comment store (local only, never committed; server writes .gitignore inside it too)
+.northstar/
 
 # Claude / AI assistant files and directories
 CLAUDE.md

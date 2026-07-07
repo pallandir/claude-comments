@@ -7,11 +7,11 @@ const LOOPBACK_HOSTS = ["http://localhost/*", "http://127.0.0.1/*", "http://*.lo
 
 export default defineManifest({
   manifest_version: 3,
-  name: "Redline",
+  name: "Northstar",
   version: "1.0.0",
   description:
     "Leave real-time comments on any interface and route them to your local AI coding assistant.",
-  homepage_url: "https://github.com/pallandir/redline",
+  homepage_url: "https://github.com/pallandir/northstar",
   // Page access comes solely from activeTab, granted per tab when the user clicks
   // the toolbar action and gone on navigation. No standing access to any site.
   // scripting lets the worker inject the overlay into that one tab on demand.
@@ -28,7 +28,7 @@ export default defineManifest({
     type: "module",
   },
   action: {
-    default_title: "Redline",
+    default_title: "Northstar",
     default_popup: "src/popup/popup.html",
     default_icon: {
       "16": "icon-16.png",

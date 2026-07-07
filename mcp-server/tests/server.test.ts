@@ -38,7 +38,7 @@ function sample(overrides: Partial<IncomingComment> = {}): IncomingComment {
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), "redline-server-"));
+  root = await mkdtemp(join(tmpdir(), "northstar-server-"));
   store = new CommentStore(root);
   broker = new Broker();
 
