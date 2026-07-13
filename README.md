@@ -22,7 +22,7 @@
       <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue" alt="License: PolyForm Noncommercial">
     </a>
     <a href="https://www.npmjs.com/package/@pallandir/northstar">
-      <img src="https://img.shields.io/npm/v/%40northstar%2Fmcp-server" alt="npm version">
+      <img src="https://img.shields.io/npm/v/@pallandir/northstar" alt="npm version">
     </a>
     <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node >= 20">
     <img src="https://img.shields.io/badge/Model%20Context%20Protocol-server-blueviolet" alt="MCP server">
@@ -114,14 +114,15 @@ Four steps, nothing to clone or build. The MCP server is launched on demand via
 ### Step 1 · Register the MCP server
 
 There is nothing to install ahead of time. `npx` fetches and runs the server on
-demand, so you can start it directly:
+demand.
+
+**Claude Code**, register it with a single command:
 
 ```sh
-npx -y @pallandir/northstar
+claude mcp add northstar -- npx -y @pallandir/northstar
 ```
 
-To wire it into your assistant, add the same command to your MCP configuration.
-Any MCP-capable client can launch it on demand via `npx`:
+**Any other MCP client**, add the same command to your MCP configuration:
 
 ```json
 {
@@ -134,6 +135,12 @@ Any MCP-capable client can launch it on demand via `npx`:
 }
 ```
 
+To check it starts on its own, you can run it directly:
+
+```sh
+npx -y @pallandir/northstar
+```
+
 ---
 
 ### Step 2 · Install the browser extension
@@ -142,7 +149,7 @@ The extension is required, it is what captures your comments on the page.
 Install Northstar from the Chrome Web Store and pin it to your toolbar. It runs in
 any Chromium browser (Chrome, Edge, Brave, Arc).
 
-[**Add to Chrome →**](https://chrome.google.com/webstore) *(store listing coming soon)*
+[**Add to Chrome →**](https://chromewebstore.google.com/detail/northstar/mmpgoabhnlkcgboiiaebeahcbbeeaggb)
 
 ---
 
@@ -152,6 +159,16 @@ Open your frontend on a `localhost` dev server, with your assistant running in
 the same repo, and click the Northstar toolbar icon to activate it on that tab.
 Copy the session id from the toolbar and have your assistant call `bind_session`
 with it. The session binds and Northstar starts watching for comments.
+
+> [!WARNING]
+> **Run your assistant in auto mode.** The watch loop implements each batch of
+> comments the moment it syncs. For the tool to work best, run your assistant in
+> auto (accept-edits) mode so it applies changes without stopping to ask on every
+> edit.
+>
+> - **Claude Code**: press `Shift+Tab` to cycle to "accept edits", or start with
+>   `claude --permission-mode acceptEdits`.
+> - **Other assistants**: enable the equivalent auto or agent mode.
 
 ---
 
@@ -190,7 +207,8 @@ Your assistant runs in the repo and comments flow to it live over loopback.
    toolbar.
 
 Any MCP client drives the loop with the raw tools: `bind_session`,
-`wait_for_update`, and `list_comments`.
+`wait_for_update`, and `list_comments`. Keep your assistant in auto (accept-edits)
+mode so each synced batch is applied without a prompt on every edit.
 
 ### Offline · remote preview or no local project
 
@@ -297,10 +315,13 @@ telemetry. See [PRIVACY.md](./PRIVACY.md).
 </details>
 
 <details>
-<summary><strong>When will the extension be on the Chrome Web Store?</strong></summary>
+<summary><strong>Where do I install Northstar?</strong></summary>
 
-The store listing is prepared and the release is coming soon. The
-[Getting started](#getting-started) section links to it.
+Two pieces. Install the extension from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/northstar/mmpgoabhnlkcgboiiaebeahcbbeeaggb),
+then register the MCP server with your assistant, for Claude Code that is
+`claude mcp add northstar -- npx -y @pallandir/northstar`. See
+[Getting started](#getting-started) for the full walkthrough.
 </details>
 
 <details>
