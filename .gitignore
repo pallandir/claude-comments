@@ -11,6 +11,10 @@ build/
 
 # Packaged release artifacts
 northstar-extension*.zip
+
+# Self-hosted extension pack artifacts (store uses the zip; Google re-signs)
+*.crx
+*.pem
 # Copied into the package at pack/publish time by the prepack script
 mcp-server/LICENSE.md
 
@@ -37,6 +41,9 @@ yarn-error.log*
 
 # Northstar comment store (local only, never committed; server writes .gitignore inside it too)
 .northstar/
+
+# Local jensen MCP state
+.jensen/
 
 # Claude / AI assistant files and directories
 CLAUDE.md
