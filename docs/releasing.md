@@ -1,6 +1,6 @@
 # Releasing
 
-Northstar ships two artifacts on their own cadence: the `@northstar/mcp-server` npm
+Northstar ships two artifacts on their own cadence: the `@pallandir/northstar` npm
 package and the browser extension zip for the Chrome Web Store. This page is the
 checklist for cutting a release of each.
 
@@ -44,7 +44,7 @@ release path is a git tag.
    ```
 
 The workflow checks out the repo, builds the server, copies the root `LICENSE.md`
-into the package, and runs `npm publish --workspace @northstar/mcp-server` with
+into the package, and runs `npm publish --workspace @pallandir/northstar` with
 provenance. You can also run it manually from the Actions tab (`workflow_dispatch`).
 
 ### Verify before tagging
@@ -52,7 +52,7 @@ provenance. You can also run it manually from the Actions tab (`workflow_dispatc
 Inspect the exact tarball contents without publishing:
 
 ```sh
-npm pack --dry-run --workspace @northstar/mcp-server
+npm pack --dry-run --workspace @pallandir/northstar
 ```
 
 The file list should be `dist/`, `README.md`, `LICENSE.md`, and `package.json`,

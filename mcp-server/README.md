@@ -1,4 +1,4 @@
-# @northstar/mcp-server
+# @pallandir/northstar
 
 MCP server that ingests real-time UI comments from the Northstar extension and
 exposes them to your AI coding assistant. It speaks standard MCP, so it works
@@ -21,7 +21,7 @@ inside it).
 
 ```bash
 # Register from npm (no clone needed), e.g. with Claude Code:
-claude mcp add northstar -- npx -y @northstar/mcp-server
+claude mcp add northstar -- npx -y @pallandir/northstar
 ```
 
 ## Tools
@@ -62,6 +62,6 @@ there is no separate per-comment fetch.
 ## Develop
 
 ```bash
-npm run dev --workspace @northstar/mcp-server     # tsup watch
-npm run build --workspace @northstar/mcp-server
+npm run dev --workspace @pallandir/northstar     # tsup watch
+npm run build --workspace @pallandir/northstar
 ```

@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-Northstar ships two published artifacts: the `@northstar/mcp-server` npm package and
+Northstar ships two published artifacts: the `@pallandir/northstar` npm package and
 the browser extension bundle. The runtime dependencies compiled into those
 artifacts are listed below, followed by the attribution for the design-scoring
 rubric.

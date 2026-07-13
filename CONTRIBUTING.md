@@ -41,7 +41,7 @@ The two halves run independently.
 For the server:
 
 ```sh
-npm run dev --workspace @northstar/mcp-server
+npm run dev --workspace @pallandir/northstar
 ```
 
 For the extension:

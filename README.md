@@ -21,7 +21,7 @@
     <a href="./LICENSE.md">
       <img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue" alt="License: PolyForm Noncommercial">
     </a>
-    <a href="https://www.npmjs.com/package/@northstar/mcp-server">
+    <a href="https://www.npmjs.com/package/@pallandir/northstar">
       <img src="https://img.shields.io/npm/v/%40northstar%2Fmcp-server" alt="npm version">
     </a>
     <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node >= 20">
@@ -117,7 +117,7 @@ There is nothing to install ahead of time. `npx` fetches and runs the server on
 demand, so you can start it directly:
 
 ```sh
-npx -y @northstar/mcp-server
+npx -y @pallandir/northstar
 ```
 
 To wire it into your assistant, add the same command to your MCP configuration.
@@ -128,7 +128,7 @@ Any MCP-capable client can launch it on demand via `npx`:
   "mcpServers": {
     "northstar": {
       "command": "npx",
-      "args": ["-y", "@northstar/mcp-server"]
+      "args": ["-y", "@pallandir/northstar"]
     }
   }
 }

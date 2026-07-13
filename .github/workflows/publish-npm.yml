@@ -20,5 +20,5 @@ jobs:
           cache: npm
       - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
       - run: npm ci
-      - run: npm run build --workspace @northstar/mcp-server
-      - run: npm publish --workspace @northstar/mcp-server
+      - run: npm run build --workspace @pallandir/northstar
+      - run: npm publish --workspace @pallandir/northstar
