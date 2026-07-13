@@ -13,7 +13,6 @@
     <br />
     <br />
     <a href="https://github.com/pallandir/northstar/issues">Report a bug</a>
-    ·
     <a href="https://github.com/pallandir/northstar/issues">Request a feature</a>
   </p>
 
