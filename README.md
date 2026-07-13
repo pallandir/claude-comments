@@ -107,9 +107,6 @@ For a deeper look at the architecture and the message flows, see the
 
 ## Getting started
 
-Four steps, nothing to clone or build. The MCP server is launched on demand via
-`npx`, and the extension updates itself from the store.
-
 ### Step 1 · Register the MCP server
 
 There is nothing to install ahead of time. `npx` fetches and runs the server on
