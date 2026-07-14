@@ -19,7 +19,7 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
           cache: npm
-      - run: npm install -g npm@latest # trusted publishing needs npm >= 11.5.1
+      - run: npm install -g npm@11 # trusted publishing needs npm >= 11.5.1; npm 11 is the latest line supporting Node 20
       - run: npm ci
       - run: npm run build --workspace @pallandir/northstar
       - run: npm publish --workspace @pallandir/northstar
