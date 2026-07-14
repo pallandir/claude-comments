@@ -78,9 +78,6 @@ gets there.
 
 ### Step 1 · Register the MCP server
 
-There is nothing to install ahead of time. `npx` fetches and runs the server on
-demand.
-
 **Claude Code**, register it with a single command:
 
 ```sh
