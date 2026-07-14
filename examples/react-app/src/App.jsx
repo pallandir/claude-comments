@@ -1,0 +1,213 @@
+const kpis = [
+  { id: "revenue", label: "Total revenue", value: "$48,200", delta: "+12.4%", up: true },
+  { id: "users", label: "Active users", value: "1,284", delta: "+3.1%", up: true },
+  { id: "churn", label: "Churn rate", value: "2.1%", delta: "-0.4%", up: true },
+  { id: "convert", label: "Conversion", value: "4.7%", delta: "-1.2%", up: false },
+];
+
+const months = [
+  { m: "Jan", v: 42 },
+  { m: "Feb", v: 55 },
+  { m: "Mar", v: 48 },
+  { m: "Apr", v: 70 },
+  { m: "May", v: 63 },
+  { m: "Jun", v: 88 },
+];
+
+const sources = [
+  { id: "direct", label: "Direct", pct: 38, color: "#0d99ff" },
+  { id: "organic", label: "Organic search", pct: 27, color: "#14ae5c" },
+  { id: "social", label: "Social", pct: 21, color: "#d97757" },
+  { id: "referral", label: "Referral", pct: 14, color: "#9b7cf6" },
+];
+
+const orders = [
+  { id: "#1042", customer: "Acme Corp", status: "Paid", amount: "$1,200" },
+  { id: "#1041", customer: "Globex", status: "Pending", amount: "$840" },
+  { id: "#1040", customer: "Initech", status: "Paid", amount: "$2,150" },
+  { id: "#1039", customer: "Umbrella", status: "Refunded", amount: "$320" },
+];
+
+const nav = ["Dashboard", "Analytics", "Customers", "Settings"];
+
+export function App() {
+  const max = Math.max(...months.map((x) => x.v));
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <div className="brand">◆ Northwind</div>
+        <nav className="nav">
+          {nav.map((item, i) => (
+            <a key={item} className={`nav-link${i === 0 ? " nav-link--active" : ""}`} href="#top">
+              {item}
+            </a>
+          ))}
+        </nav>
+        <div className="sidebar-user">
+          <div className="avatar">JL</div>
+          <div>
+            <div className="user-name">Jamie Lee</div>
+            <div className="user-role">Product owner</div>
+          </div>
+        </div>
+      </aside>
+
+      <main className="main">
+        <header className="topbar">
+          <div>
+            <h1 className="title">Overview</h1>
+            <p className="subtitle">Welcome back, here is how things look today.</p>
+          </div>
+          <div className="topbar-actions">
+            <input className="search" placeholder="Search…" />
+            <button className="cta" type="button">
+              New report
+            </button>
+          </div>
+        </header>
+
+        <section className="kpis">
+          {kpis.map((kpi) => (
+            <article key={kpi.id} className="card kpi">
+              <span className="kpi-label">{kpi.label}</span>
+              <strong className="kpi-value">{kpi.value}</strong>
+              <span className={`kpi-delta${kpi.up ? " kpi-delta--up" : " kpi-delta--down"}`}>
+                {kpi.delta}
+              </span>
+            </article>
+          ))}
+        </section>
+
+        <section className="panels">
+          <article className="card chart-card">
+            <div className="card-head">
+              <h2 className="card-title">Revenue by month</h2>
+              <span className="card-hint">Last 6 months</span>
+            </div>
+            <div className="bars">
+              {months.map((month) => (
+                <div key={month.m} className="bar-col">
+                  <div className="bar" style={{ height: `${(month.v / max) * 140}px` }} />
+                  <span className="bar-label">{month.m}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="card sources-card">
+            <div className="card-head">
+              <h2 className="card-title">Traffic sources</h2>
+            </div>
+            <ul className="sources">
+              {sources.map((source) => (
+                <li key={source.id} className="source">
+                  <span className="source-dot" style={{ background: source.color }} />
+                  <span className="source-label">{source.label}</span>
+                  <span className="source-pct">{source.pct}%</span>
+                </li>
+              ))}
+            </ul>
+          </article>
+        </section>
+
+        <section className="card table-card">
+          <div className="card-head">
+            <h2 className="card-title">Recent orders</h2>
+            <button className="link-btn" type="button">
+              View all
+            </button>
+          </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th className="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order.id}>
+                  <td className="mono">{order.id}</td>
+                  <td>{order.customer}</td>
+                  <td>
+                    <span className={`badge badge--${order.status.toLowerCase()}`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="num">{order.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </main>
+
+      <style>{`
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f4f5f7; color: #1e1e1e; }
+        a { text-decoration: none; color: inherit; }
+        .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+
+        .sidebar { display: flex; flex-direction: column; gap: 24px; padding: 24px 18px; background: #ffffff; border-right: 1px solid #e6e6e6; }
+        .brand { font-size: 17px; font-weight: 700; color: #0d99ff; }
+        .nav { display: flex; flex-direction: column; gap: 4px; }
+        .nav-link { padding: 9px 12px; border-radius: 9px; font-size: 14px; color: #4b5563; }
+        .nav-link:hover { background: #f4f5f7; }
+        .nav-link--active { background: #e8f4ff; color: #0d99ff; font-weight: 600; }
+        .sidebar-user { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 16px; border-top: 1px solid #e6e6e6; }
+        .avatar { width: 36px; height: 36px; border-radius: 50%; background: #0d99ff; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+        .user-name { font-size: 13px; font-weight: 600; }
+        .user-role { font-size: 12px; color: #8a8a8a; }
+
+        .main { padding: 28px 32px; max-width: 1080px; }
+        .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+        .title { font-size: 24px; margin: 0; }
+        .subtitle { margin: 4px 0 0; color: #6b7280; font-size: 14px; }
+        .topbar-actions { display: flex; gap: 10px; align-items: center; }
+        .search { padding: 9px 12px; border: 1px solid #e6e6e6; border-radius: 9px; font-size: 14px; background: #fff; outline: none; }
+        .search:focus { border-color: #0d99ff; box-shadow: 0 0 0 3px rgba(13,153,255,0.12); }
+        .cta { padding: 9px 16px; border: 0; border-radius: 9px; background: #0d99ff; color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; }
+        .cta:hover { background: #0a85e0; }
+
+        .card { background: #fff; border: 1px solid #e6e6e6; border-radius: 14px; padding: 20px; }
+        .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .card-title { font-size: 15px; margin: 0; }
+        .card-hint { font-size: 12px; color: #8a8a8a; }
+
+        .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+        .kpi { display: flex; flex-direction: column; gap: 6px; }
+        .kpi-label { font-size: 13px; color: #6b7280; }
+        .kpi-value { font-size: 26px; }
+        .kpi-delta { font-size: 12px; font-weight: 600; }
+        .kpi-delta--up { color: #14ae5c; }
+        .kpi-delta--down { color: #e5484d; }
+
+        .panels { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .bars { display: flex; align-items: flex-end; gap: 16px; height: 160px; padding-top: 8px; }
+        .bar-col { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; }
+        .bar { width: 100%; max-width: 40px; border-radius: 8px 8px 0 0; background: linear-gradient(#0d99ff, #6dc1ff); }
+        .bar-label { font-size: 12px; color: #8a8a8a; }
+
+        .sources { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+        .source { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+        .source-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .source-label { flex: 1; }
+        .source-pct { color: #6b7280; font-variant-numeric: tabular-nums; }
+
+        .table-card { padding-bottom: 8px; }
+        .link-btn { border: 0; background: none; color: #0d99ff; font-size: 13px; font-weight: 600; cursor: pointer; }
+        .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .table th { text-align: left; padding: 10px 8px; color: #8a8a8a; font-size: 12px; font-weight: 600; border-bottom: 1px solid #e6e6e6; }
+        .table td { padding: 12px 8px; border-bottom: 1px solid #f0f0f0; }
+        .table .num { text-align: right; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #4b5563; }
+        .badge { padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+        .badge--paid { background: #e6f7ee; color: #14ae5c; }
+        .badge--pending { background: #fff4e5; color: #b8730b; }
+        .badge--refunded { background: #fdeaea; color: #e5484d; }
+      `}</style>
+    </div>
+  );
+}
