@@ -14,6 +14,8 @@ const months = [
   { m: "Jun", v: 88 },
 ];
 
+const gridLines = [100, 75, 50, 25, 0];
+
 const sources = [
   { id: "direct", label: "Direct", pct: 38, color: "#0d99ff" },
   { id: "organic", label: "Organic search", pct: 27, color: "#14ae5c" },
@@ -31,7 +33,6 @@ const orders = [
 const nav = ["Dashboard", "Analytics", "Customers", "Settings"];
 
 export function App() {
-  const max = Math.max(...months.map((x) => x.v));
   return (
     <div className="app">
       <aside className="sidebar">
@@ -84,13 +85,23 @@ export function App() {
               <h2 className="card-title">Revenue by month</h2>
               <span className="card-hint">Last 6 months</span>
             </div>
-            <div className="bars">
-              {months.map((month) => (
-                <div key={month.m} className="bar-col">
-                  <div className="bar" style={{ height: `${(month.v / max) * 140}px` }} />
-                  <span className="bar-label">{month.m}</span>
-                </div>
-              ))}
+            <div className="chart">
+              <div className="chart-grid">
+                {gridLines.map((line) => (
+                  <div key={line} className="grid-line">
+                    <span className="grid-value">${line}k</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bars">
+                {months.map((month) => (
+                  <div key={month.m} className="bar-col">
+                    <span className="bar-value">${month.v}k</span>
+                    <div className="bar" style={{ height: `${(month.v / 100) * 140}px` }} />
+                    <span className="bar-label">{month.m}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </article>
 
@@ -98,15 +109,25 @@ export function App() {
             <div className="card-head">
               <h2 className="card-title">Traffic sources</h2>
             </div>
-            <ul className="sources">
-              {sources.map((source) => (
-                <li key={source.id} className="source">
-                  <span className="source-dot" style={{ background: source.color }} />
-                  <span className="source-label">{source.label}</span>
-                  <span className="source-pct">{source.pct}%</span>
-                </li>
-              ))}
-            </ul>
+            <table className="table sources-table">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th className="num">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sources.map((source) => (
+                  <tr key={source.id}>
+                    <td>
+                      <span className="source-dot" style={{ background: source.color }} />
+                      <span className="source-label">{source.label}</span>
+                    </td>
+                    <td className="num source-pct">{source.pct}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </article>
         </section>
 
@@ -185,15 +206,18 @@ export function App() {
         .kpi-delta--down { color: #e5484d; }
 
         .panels { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
-        .bars { display: flex; align-items: flex-end; gap: 16px; height: 160px; padding-top: 8px; }
+        .chart { position: relative; padding-left: 44px; }
+        .chart-grid { position: absolute; inset: 8px 0 24px 44px; display: flex; flex-direction: column; justify-content: space-between; }
+        .grid-line { position: relative; border-top: 1px solid #f0f0f0; }
+        .grid-value { position: absolute; left: -44px; top: -8px; width: 38px; text-align: right; font-size: 11px; color: #b5b5b5; font-variant-numeric: tabular-nums; }
+        .bars { position: relative; display: flex; align-items: flex-end; gap: 16px; height: 160px; padding-top: 8px; }
         .bar-col { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; }
+        .bar-value { font-size: 11px; font-weight: 600; color: #6b7280; font-variant-numeric: tabular-nums; }
         .bar { width: 100%; max-width: 40px; border-radius: 8px 8px 0 0; background: linear-gradient(#0d99ff, #6dc1ff); }
         .bar-label { font-size: 12px; color: #8a8a8a; }
 
-        .sources { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-        .source { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-        .source-dot { width: 10px; height: 10px; border-radius: 50%; }
-        .source-label { flex: 1; }
+        .source-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
+        .source-label { vertical-align: middle; }
         .source-pct { color: #6b7280; font-variant-numeric: tabular-nums; }
 
         .table-card { padding-bottom: 8px; }
