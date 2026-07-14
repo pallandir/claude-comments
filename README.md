@@ -78,6 +78,10 @@ gets there.
 
 ### Step 1 · Register the MCP server
 
+The server is published on npm as
+[`@pallandir/northstar`](https://www.npmjs.com/package/@pallandir/northstar) and
+runs on demand via `npx`, no global install needed.
+
 **Claude Code**, register it with a single command:
 
 ```sh
@@ -97,17 +101,10 @@ claude mcp add northstar -- npx -y @pallandir/northstar
 }
 ```
 
-To check it starts on its own, you can run it directly:
-
-```sh
-npx -y @pallandir/northstar
-```
-
 ---
 
 ### Step 2 · Install the browser extension
 
-The extension is required, it is what captures your comments on the page.
 Install Northstar from the Chrome Web Store and pin it to your toolbar. It runs in
 any Chromium browser (Chrome, Edge, Brave, Arc).
 
@@ -180,8 +177,8 @@ For a deeper look at the architecture and the message flows, see the
 
 ## Usage
 
-[Getting started](#getting-started) covers the one-time setup. Day to day,
-Northstar runs in one of two modes depending on where your frontend lives.
+Day to day, Northstar runs in one of two modes depending on where your frontend
+lives.
 
 ### Online · localhost dev server
 
@@ -236,8 +233,7 @@ Add the matching plugin to your dev build:
 
 Northstar's MCP server speaks standard MCP over stdio and works with any
 MCP-capable AI coding assistant, Claude Code, Cursor, Windsurf, and similar
-clients all connect the same way. Any client that can call the tools below can
-drive the full flow.
+clients all connect the same way.
 
 The extension targets **Chromium Manifest V3**: Chrome, Edge, Brave, and Arc. A
 Firefox port is not yet available.
@@ -360,9 +356,6 @@ Removing Northstar is three independent steps; do the ones that apply to you.
    ```sh
    rm -rf .northstar
    ```
-
-   Nothing lives outside your machine, so there is no account or remote data to
-   clean up.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
