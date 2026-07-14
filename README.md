@@ -31,9 +31,9 @@
 ## Table of contents
 
 - [What is Northstar](#what-is-northstar)
-- [How it works](#how-it-works)
 - [Prerequisites](#prerequisites)
 - [Getting started](#getting-started)
+- [How it works](#how-it-works)
 - [Usage](#usage)
 - [Source mapping](#source-mapping)
 - [Compatibility](#compatibility)
@@ -59,37 +59,6 @@ A north star is the one point in the sky that never moves, the thing you steer b
 when everything else is drifting. Northstar makes your design intent that fixed
 point: you mark where the UI should go, and your assistant moves the code until it
 gets there.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## How it works
-
-```mermaid
-flowchart TD
-    A["Browser extension\n(Chromium MV3)"]
-    B["MCP server\n(127.0.0.1:7474)"]
-    C["Comment store\n(.northstar/)"]
-    D["/mcp__northstar__watch\nwatch loop"]
-    E["Sub-agent\nedits source"]
-
-    A -- "POST /comments\n(loopback only)" --> B
-    B -- "writes" --> C
-    C -- "list_comments" --> D
-    D -- "spawns" --> E
-    E -- "resolve / defer" --> D
-```
-
-The extension activates per-tab when you click its toolbar icon. Each saved item
-carries a stable selector, visible text, computed styles, a cropped screenshot,
-and a precise `file:line:column` from the framework inspector plugin that
-anchors every edit to the right source location. On a `localhost` dev server the
-extension sends those comments directly to the MCP server running in your
-project. Your MCP client binds the session, watches for new batches, and applies
-each one against your real source files. Comments that need deeper thought are
-parked for later; a notice appears in the browser toolbar.
-
-For a deeper look at the architecture and the message flows, see the
-[docs folder](./docs).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -178,6 +147,37 @@ you send is applied directly to your source by your assistant. See
 > The comment store (`.northstar/design-comments.md`) and screenshots
 > (`.northstar/design-shots/`) are written to the project root where your MCP
 > client is running and are gitignored. Keep them out of version control.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["Browser extension\n(Chromium MV3)"]
+    B["MCP server\n(127.0.0.1:7474)"]
+    C["Comment store\n(.northstar/)"]
+    D["/mcp__northstar__watch\nwatch loop"]
+    E["Sub-agent\nedits source"]
+
+    A -- "POST /comments\n(loopback only)" --> B
+    B -- "writes" --> C
+    C -- "list_comments" --> D
+    D -- "spawns" --> E
+    E -- "resolve / defer" --> D
+```
+
+The extension activates per-tab when you click its toolbar icon. Each saved item
+carries a stable selector, visible text, computed styles, a cropped screenshot,
+and a precise `file:line:column` from the framework inspector plugin that
+anchors every edit to the right source location. On a `localhost` dev server the
+extension sends those comments directly to the MCP server running in your
+project. Your MCP client binds the session, watches for new batches, and applies
+each one against your real source files. Comments that need deeper thought are
+parked for later; a notice appears in the browser toolbar.
+
+For a deeper look at the architecture and the message flows, see the
+[docs folder](./docs).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
