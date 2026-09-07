@@ -111,12 +111,19 @@ test("describe reports availability for the toolbar", async () => {
   });
 });
 
-test("concurrent sends are serialized, never interleaved", async () => {
+test("back-to-back sends are coalesced into one typed line", async () => {
   const driver = new FakeDriver([IDLE]);
   const handoff = handoffWith(driver);
   const [a, b] = await Promise.all([handoff.send(), handoff.send()]);
   assert.equal(a.typed, true);
   assert.equal(b.typed, true);
-  assert.equal(driver.writes.length, 2);
-  assert.equal(driver.enters, 2);
+  assert.equal(driver.writes.length, 1, "the second batch rides the first announcement");
+  assert.equal(driver.enters, 1);
+});
+
+test("a flood on loopback cannot type at the agent repeatedly", async () => {
+  const driver = new FakeDriver([IDLE]);
+  const handoff = handoffWith(driver);
+  for (let i = 0; i < 20; i += 1) await handoff.send();
+  assert.equal(driver.writes.length, 1);
 });

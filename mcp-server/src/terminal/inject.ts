@@ -1,4 +1,4 @@
-import { READY_POLL_MS, READY_TIMEOUT_MS, SUBMIT_DELAY_MS } from "../config.js";
+import { COALESCE_MS, READY_POLL_MS, READY_TIMEOUT_MS, SUBMIT_DELAY_MS } from "../config.js";
 import { detectTerminal } from "./detect.js";
 import { HANDOFF_LINE } from "./payload.js";
 import type { Handoff, HandoffResult, TerminalDriver, TerminalStatus } from "./types.js";
@@ -47,6 +47,7 @@ async function waitForIdle(driver: TerminalDriver, timeoutMs: number): Promise<s
 export class TerminalHandoff implements Handoff {
   private detection: ReturnType<typeof detectTerminal> | null = null;
   private chain: Promise<unknown> = Promise.resolve();
+  private lastTyped = 0;
 
   constructor(
     private readonly log: (msg: string) => void,
@@ -73,6 +74,12 @@ export class TerminalHandoff implements Handoff {
       return { typed: false, reason };
     }
 
+    // One line covers every comment still open, so batches landing back to back are announced
+    // once. That also stops anything on loopback from typing at the agent in a loop.
+    if (Date.now() - this.lastTyped < COALESCE_MS) {
+      return { typed: true, driver: driver.name, reason: "folded into the batch just announced" };
+    }
+
     try {
       const blocked = await waitForIdle(driver, this.readyTimeoutMs);
       if (blocked) {
@@ -84,6 +91,7 @@ export class TerminalHandoff implements Handoff {
       // same burst into the pasted text instead of submitting it.
       await sleep(SUBMIT_DELAY_MS);
       await driver.sendEnter();
+      this.lastTyped = Date.now();
       this.log(`handoff typed into ${driver.name}`);
       return { typed: true, driver: driver.name };
     } catch (err) {
