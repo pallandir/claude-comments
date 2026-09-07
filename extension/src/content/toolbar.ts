@@ -1,4 +1,5 @@
-import type { DeferralNotice, QueueStatus } from "../messages.js";
+import { browser } from "../lib/browser.js";
+import type { DeferralNotice, QueueStatus, SendOutcome } from "../messages.js";
 import {
   ICON_COMMENT,
   ICON_GRIP,
@@ -29,7 +30,7 @@ export interface ToolbarState {
   count: number;
   status: QueueStatus | null;
   drawerOpen: boolean;
-  sessionId: string | null;
+  lastSend: SendOutcome | null;
   picking: boolean;
 }
 
@@ -42,7 +43,9 @@ export class Toolbar {
   private readonly handoffBtn: HTMLButtonElement;
   private readonly targetBtn: HTMLButtonElement;
   private readonly handlers: ToolbarHandlers;
+  private readonly sendLabel: Text;
   private panelKey = "";
+  private sentTimer = 0;
 
   constructor(surface: Surface, handlers: ToolbarHandlers) {
     this.handlers = handlers;
@@ -74,10 +77,13 @@ export class Toolbar {
     this.commentsBtn.append(icon(ICON_COMMENT, "cc-action-glyph"), this.commentsLabel);
     this.commentsBtn.addEventListener("click", () => handlers.onComments());
 
-    this.sendBtn = action(ICON_SEND, "Send to AI", "Send all comments to your AI assistant", () =>
-      handlers.onSend(),
-    );
-    this.sendBtn.classList.add("cc-action--primary");
+    this.sendLabel = document.createTextNode("Send to AI");
+    this.sendBtn = document.createElement("button");
+    this.sendBtn.type = "button";
+    this.sendBtn.className = "cc-action cc-action--primary cc-has-tip";
+    this.sendBtn.dataset.tip = "Send all comments to your AI assistant";
+    this.sendBtn.append(icon(ICON_SEND, "cc-action-glyph"), this.sendLabel);
+    this.sendBtn.addEventListener("click", () => handlers.onSend());
 
     this.handoffBtn = action(ICON_HANDOFF, "Handoff", "Download a Markdown handoff", () =>
       handlers.onHandoff(),
@@ -106,6 +112,7 @@ export class Toolbar {
   }
 
   destroy(): void {
+    window.clearTimeout(this.sentTimer);
     this.root.remove();
   }
 
@@ -126,25 +133,44 @@ export class Toolbar {
 
     const status = state.status;
     const reachable = Boolean(status?.serverReachable);
-    const watching = Boolean(status?.watching);
-    this.sendBtn.disabled = !reachable || !watching || !status || status.queued === 0;
-
+    this.sendBtn.disabled = !reachable || !status || status.queued === 0;
     this.handoffBtn.classList.toggle("cc-action--primary", !reachable);
 
     const notices = status?.notices ?? [];
+    const send = state.lastSend;
+    const terminal = status?.terminal;
+
     if (notices.length > 0) {
       this.setPanel(`notices:${notices.map((n) => n.commentId).join(",")}`, () =>
         this.noticePanel(notices),
       );
+    } else if (send && !send.typed && send.reason) {
+      this.setPanel(`send:${send.reason}`, () =>
+        hintPanel("Comments saved, not announced", send.reason ?? ""),
+      );
     } else if (!reachable) {
-      this.setPanel("setup:server", () => setupPanel(false, false, null, state.sessionId));
-    } else if (!watching) {
-      this.setPanel("setup:watch", () =>
-        setupPanel(true, false, status?.root ?? null, state.sessionId),
+      this.setPanel("offline", () =>
+        hintPanel(
+          "No Northstar server on this machine",
+          "Start your AI agent in the project you are commenting on. Northstar runs alongside it.",
+        ),
+      );
+    } else if (terminal && !terminal.available) {
+      this.setPanel(`terminal:${terminal.reason ?? ""}`, () =>
+        hintPanel("Comments will not reach your agent", terminal.reason ?? ""),
       );
     } else {
       this.clearPanel();
     }
+  }
+
+  flashSent(send: SendOutcome): void {
+    if (!send.typed) return;
+    window.clearTimeout(this.sentTimer);
+    this.sendLabel.textContent = send.sent === 1 ? "Sent 1" : `Sent ${send.sent}`;
+    this.sentTimer = window.setTimeout(() => {
+      this.sendLabel.textContent = "Send to AI";
+    }, 1600);
   }
 
   private setPanel(key: string, build: () => HTMLElement): void {
@@ -221,7 +247,7 @@ export class Toolbar {
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      void chrome.storage.local.set({
+      void browser.storage.local.set({
         [POS_KEY]: { left: this.root.style.left, top: this.root.style.top },
       });
     };
@@ -238,7 +264,7 @@ export class Toolbar {
   }
 
   private async restorePosition(): Promise<void> {
-    const stored = await chrome.storage.local.get(POS_KEY);
+    const stored = await browser.storage.local.get(POS_KEY);
     const pos = stored[POS_KEY] as { left: string; top: string } | undefined;
     if (pos?.left && pos.top) {
       this.root.style.left = pos.left;
@@ -270,90 +296,17 @@ function sep(): HTMLElement {
   return el;
 }
 
-function setupPanel(
-  reachable: boolean,
-  watching: boolean,
-  root: string | null,
-  sessionId: string | null,
-): HTMLElement {
+function hintPanel(title: string, body: string): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "cc-setup";
-
-  const title = document.createElement("div");
-  title.className = "cc-setup-title";
-  title.textContent = "Set up auto-pickup";
-  wrap.append(title);
-
-  const projectHint = reachable
-    ? root
-      ? short(root)
-      : "Waiting for your assistant…"
-    : "Start Northstar in your editor.";
-
-  const tip = document.createElement("div");
-  tip.className = "cc-setup-hint";
-  tip.textContent =
-    "Tip: run your AI assistant in auto-accept/edit mode so comments apply without approval pauses (Claude Code: Shift+Tab). See the README for the one-time allow-list setup.";
-  wrap.append(watchRow(sessionId), setupRow(watching, "Project connected", projectHint), tip);
+  const heading = document.createElement("div");
+  heading.className = "cc-setup-title";
+  heading.textContent = title;
+  const sub = document.createElement("div");
+  sub.className = "cc-setup-hint";
+  sub.textContent = body;
+  wrap.append(heading, sub);
   return wrap;
-}
-
-function setupRow(done: boolean, label: string, hint: string): HTMLElement {
-  const row = document.createElement("div");
-  row.className = `cc-setup-row${done ? " cc-setup-row--done" : ""}`;
-  const mark = document.createElement("span");
-  mark.className = "cc-setup-mark";
-  mark.textContent = done ? "✓" : "•";
-  const body = document.createElement("div");
-  const strong = document.createElement("div");
-  strong.className = "cc-setup-label";
-  strong.textContent = label;
-  const sub = document.createElement("div");
-  sub.className = "cc-setup-hint";
-  sub.textContent = hint;
-  body.append(strong, sub);
-  row.append(mark, body);
-  return row;
-}
-
-function watchRow(sessionId: string | null): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "cc-setup-row";
-  const mark = document.createElement("span");
-  mark.className = "cc-setup-mark";
-  mark.textContent = "•";
-  const body = document.createElement("div");
-  const strong = document.createElement("div");
-  strong.className = "cc-setup-label";
-  strong.textContent = "Pair with your AI assistant";
-
-  const cmdRow = document.createElement("div");
-  cmdRow.className = "cc-setup-cmd cc-setup-id";
-  const cmdCode = document.createElement("code");
-  cmdCode.textContent = sessionId ? `/mcp__northstar__watch ${shortId(sessionId)}` : "loading…";
-  const copy = document.createElement("button");
-  copy.type = "button";
-  copy.className = "cc-copy";
-  copy.textContent = "Copy";
-  copy.addEventListener("click", () => {
-    void navigator.clipboard?.writeText(sessionId ? `/mcp__northstar__watch ${sessionId}` : "");
-    copy.textContent = "Copied";
-    window.setTimeout(() => {
-      copy.textContent = "Copy";
-    }, 1400);
-  });
-  cmdRow.append(cmdCode, copy);
-
-  const sub = document.createElement("div");
-  sub.className = "cc-setup-hint";
-  sub.textContent = "Paste into your assistant to start.";
-  body.append(strong, cmdRow, sub);
-  row.append(mark, body);
-  return row;
-}
-
-function shortId(id: string): string {
-  return id.split("-")[0] ?? id;
 }
 
 function remotePanel(): HTMLElement {
@@ -367,9 +320,4 @@ function remotePanel(): HTMLElement {
   sub.textContent = "Comment freely, then click Handoff to export a file for your developers.";
   wrap.append(title, sub);
   return wrap;
-}
-
-function short(root: string): string {
-  const parts = root.replace(/\/+$/, "").split("/");
-  return parts[parts.length - 1] || root;
 }

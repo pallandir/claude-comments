@@ -29,24 +29,16 @@ export interface DeferralNotice {
   createdAt: string;
 }
 
-export interface PageRatingSection {
-  key: "typography" | "composition" | "motion" | "color" | "details";
-  label: string;
-  score: number;
-  advice: string;
+export interface TerminalStatus {
+  available: boolean;
+  driver?: string;
+  reason?: string;
 }
 
-export interface PageRating {
-  id: string;
-  status: "pending" | "scored";
-  result?: {
-    score: number;
-    ui: number;
-    ux: number;
-    coherence: number;
-    notes: string;
-    sections: PageRatingSection[];
-  };
+export interface SendOutcome {
+  sent: number;
+  typed: boolean;
+  reason?: string;
 }
 
 export type Message =
@@ -59,9 +51,7 @@ export type Message =
   | { type: "page-comments"; url: string }
   | { type: "get-comments"; url: string }
   | { type: "remove-comment"; cid: string }
-  | { type: "clear-comments"; url: string }
   | { type: "clear-all" }
-  | { type: "count-all" }
   | {
       type: "update-comment";
       cid: string;
@@ -72,7 +62,6 @@ export type Message =
   | { type: "flush" }
   | { type: "dismiss-notice"; commentId: string }
   | { type: "queue-status" }
-  | { type: "request-rating"; url: string; screenshotDataUrl: string | null }
   | { type: "reopen-comment"; id: string; note?: string };
 
 export interface QueueStatus {
@@ -80,22 +69,20 @@ export interface QueueStatus {
   serverReachable: boolean;
   port: number | null;
   root?: string | null;
-  watching?: boolean;
   notices?: DeferralNotice[];
-  sessionId?: string;
   version?: number | null;
-  rating?: PageRating | null;
+  terminal?: TerminalStatus;
 }
 
 export type Response =
   | {
       ok: true;
       status?: QueueStatus;
+      send?: SendOutcome;
       dataUrl?: string | null;
       cid?: string;
       pins?: PinModel[];
       comments?: QueuedRequest[];
-      count?: number;
       active?: boolean;
     }
   | { ok: false; error: string };

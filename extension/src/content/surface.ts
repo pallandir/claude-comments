@@ -2,6 +2,7 @@ import { resolveXPath } from "../lib/xpath.js";
 import type { PinModel } from "../messages.js";
 import { ICON_COLOR, ICON_COMMENT, ICON_TEXT, ICON_WARNING, icon } from "./icons.js";
 import overlayCss from "./overlay.css?inline";
+import { TopLayer } from "./top-layer.js";
 
 const OVERLAY_MARGIN = 8;
 const COMPOSER_WIDTH = 264;
@@ -52,6 +53,7 @@ export class Surface {
   private composerAnchor: Element | null = null;
   private actionMenu: HTMLElement | null = null;
   private actionCleanup: (() => void) | null = null;
+  private readonly topLayer = new TopLayer();
   private rafId = 0;
 
   constructor() {
@@ -64,13 +66,16 @@ export class Surface {
   }
 
   mount(): void {
-    if (!this.host.isConnected) document.documentElement.append(this.host);
+    if (this.host.isConnected) return;
+    document.documentElement.append(this.host);
+    this.topLayer.attach(this.host, this.shadow);
   }
 
   unmount(): void {
     this.closeActionMenu();
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    this.topLayer.detach();
     this.host.remove();
   }
 

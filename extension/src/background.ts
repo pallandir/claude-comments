@@ -1,21 +1,16 @@
 import contentScript from "./content/content.ts?script";
+import { browser } from "./lib/browser.js";
 import { captureRegion } from "./lib/capture.js";
 import {
   clearAll,
-  clearForUrl,
-  clearServerForUrl,
-  countAll,
   dismissNotice,
   enqueue,
-  fetchRating,
   fetchServerComments,
   flush,
-  getSessionToken,
   isLocalUrl,
   listForUrl,
   remove,
   reopenComment,
-  requestRating,
   status,
   update,
 } from "./lib/transport.js";
@@ -26,8 +21,8 @@ const ACTIVE_KEY = "cc-active";
 
 const BADGE_COLOR = "#009efa"; // Chrome badge API requires a hex string, cannot use a CSS var
 
-chrome.runtime.onInstalled.addListener(() => {
-  void chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR });
+browser.runtime.onInstalled.addListener(() => {
+  void browser.action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 });
 
 // The overlay is injected only here, into the one tab the user just activated, under
@@ -36,10 +31,10 @@ chrome.runtime.onInstalled.addListener(() => {
 // Store, view-source) reject injection; we report that and stay off.
 async function injectOverlay(tabId: number): Promise<boolean> {
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: [contentScript] });
+    await browser.scripting.executeScript({ target: { tabId }, files: [contentScript] });
     return true;
   } catch {
-    await chrome.action.setBadgeText({ tabId, text: "n/a" });
+    await browser.action.setBadgeText({ tabId, text: "n/a" });
     return false;
   }
 }
@@ -47,21 +42,21 @@ async function injectOverlay(tabId: number): Promise<boolean> {
 async function setOverlay(tabId: number, on: boolean): Promise<void> {
   if (on && !(await injectOverlay(tabId))) return;
   await setActive(tabId, on);
-  await chrome.action.setBadgeText({ tabId, text: on ? "ON" : "" });
-  chrome.tabs.sendMessage(tabId, { type: "set-active", on } satisfies Message).catch(() => {});
+  await browser.action.setBadgeText({ tabId, text: on ? "ON" : "" });
+  browser.tabs.sendMessage(tabId, { type: "set-active", on } satisfies Message).catch(() => {});
 }
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+browser.tabs.onRemoved.addListener((tabId) => {
   void setActive(tabId, false);
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status !== "loading") return;
   void setActive(tabId, false);
-  void chrome.action.setBadgeText({ tabId, text: "" });
+  void browser.action.setBadgeText({ tabId, text: "" });
 });
 
-chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
+browser.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
   handle(message, sender)
     .then(sendResponse)
     .catch((err) => sendResponse({ ok: false, error: (err as Error).message }));
@@ -69,7 +64,7 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
 });
 
 async function handle(message: Message, sender: chrome.runtime.MessageSender): Promise<Response> {
-  if (sender.id !== chrome.runtime.id) return { ok: false, error: "forbidden" };
+  if (sender.id !== browser.runtime.id) return { ok: false, error: "forbidden" };
   switch (message.type) {
     case "sync-active": {
       const id = message.tabId ?? sender.tab?.id;
@@ -80,11 +75,8 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
       return { ok: true };
     }
     case "tab-status": {
-      const local = isLocalUrl(message.url);
-      if (!local) return { ok: true, status: offlineStatus() };
-      const st = await status();
-      const rating = await fetchRating(message.url);
-      return { ok: true, status: { ...st, sessionId: await getSessionToken(), rating } };
+      if (!isLocalUrl(message.url)) return { ok: true, status: offlineStatus() };
+      return { ok: true, status: await status() };
     }
     case "capture-region": {
       try {
@@ -112,15 +104,9 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
     case "remove-comment":
       await remove(message.cid);
       return { ok: true, status: await status() };
-    case "clear-comments":
-      await clearForUrl(message.url);
-      if (isLocalUrl(sender.tab?.url ?? "")) await clearServerForUrl(message.url);
-      return { ok: true, status: await status() };
     case "clear-all":
       await clearAll();
       return { ok: true, status: await status() };
-    case "count-all":
-      return { ok: true, count: isLocalUrl(sender.tab?.url ?? "") ? await countAll() : 0 };
     case "update-comment":
       await update(message.cid, message.text, {
         planFirst: message.planFirst,
@@ -128,20 +114,13 @@ async function handle(message: Message, sender: chrome.runtime.MessageSender): P
       });
       return { ok: true, status: await status() };
     case "flush": {
-      const local = isLocalUrl(sender.tab?.url ?? "");
-      return { ok: true, status: local ? await flush() : offlineStatus() };
+      if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true, status: offlineStatus() };
+      const { status: st, send } = await flush();
+      return { ok: true, status: st, send };
     }
     case "queue-status": {
-      const local = isLocalUrl(sender.tab?.url ?? "");
-      if (!local) return { ok: true, status: offlineStatus() };
-      const st = await status();
-      const rating = sender.tab?.url ? await fetchRating(sender.tab.url) : null;
-      return { ok: true, status: { ...st, sessionId: await getSessionToken(), rating } };
-    }
-    case "request-rating": {
-      if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true };
-      await requestRating(message.url, message.screenshotDataUrl);
-      return { ok: true };
+      if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true, status: offlineStatus() };
+      return { ok: true, status: await status() };
     }
     case "reopen-comment": {
       if (!isLocalUrl(sender.tab?.url ?? "")) return { ok: true };
@@ -159,23 +138,24 @@ function offlineStatus(): QueueStatus {
     serverReachable: false,
     port: null,
     root: null,
-    watching: false,
     notices: [],
+    version: null,
+    terminal: { available: false },
   };
 }
 
 async function isActive(tabId: number): Promise<boolean> {
-  const stored = await chrome.storage.session.get(ACTIVE_KEY);
+  const stored = await browser.storage.session.get(ACTIVE_KEY);
   const map = (stored[ACTIVE_KEY] as Record<number, boolean> | undefined) ?? {};
   return Boolean(map[tabId]);
 }
 
 async function setActive(tabId: number, on: boolean): Promise<void> {
-  const stored = await chrome.storage.session.get(ACTIVE_KEY);
+  const stored = await browser.storage.session.get(ACTIVE_KEY);
   const map = (stored[ACTIVE_KEY] as Record<number, boolean> | undefined) ?? {};
   if (on) map[tabId] = true;
   else delete map[tabId];
-  await chrome.storage.session.set({ [ACTIVE_KEY]: map });
+  await browser.storage.session.set({ [ACTIVE_KEY]: map });
 }
 
 async function pagePins(url: string, tabUrl?: string): Promise<PinModel[]> {

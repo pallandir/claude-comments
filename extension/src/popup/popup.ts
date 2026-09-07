@@ -1,24 +1,40 @@
+import { browser } from "../lib/browser.js";
 import type { Message, QueueStatus } from "../messages.js";
+
+const LOOPBACK_ORIGINS = ["http://localhost/*", "http://127.0.0.1/*", "http://*.localhost/*"];
+
+const REFRESH_MS = 2000;
 
 async function send(
   message: Message,
 ): Promise<{ ok: boolean; status?: QueueStatus; active?: boolean }> {
   try {
-    return await chrome.runtime.sendMessage(message);
+    return await browser.runtime.sendMessage(message);
   } catch {
     return { ok: false };
   }
 }
 
-const REFRESH_MS = 2000;
+// Firefox treats manifest host permissions as opt-in, so the loopback grant has to be asked for
+// from a user gesture or every request to the local server is blocked before it is sent.
+async function ensureLoopbackAccess(): Promise<boolean> {
+  try {
+    if (await browser.permissions.contains({ origins: LOOPBACK_ORIGINS })) return true;
+    return await browser.permissions.request({ origins: LOOPBACK_ORIGINS });
+  } catch {
+    return true;
+  }
+}
 
 async function init(): Promise<void> {
   const app = document.getElementById("app");
   if (!app) return;
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
-    app.innerHTML = `<p class="rl-unavailable">No active tab found.</p>`;
+    const unavailable = el("p", "rl-unavailable");
+    unavailable.textContent = "No active tab found.";
+    app.replaceChildren(unavailable);
     return;
   }
 
@@ -50,15 +66,14 @@ interface State {
 
 function render(app: HTMLElement, state: State): void {
   const { isActive, status, tabId } = state;
-  const watching = Boolean(status?.watching);
-
-  app.innerHTML = "";
+  const reachable = Boolean(status?.serverReachable);
+  const terminal = status?.terminal;
 
   const header = el("div", "rl-header");
   const wordmark = el("span", "rl-wordmark");
   wordmark.textContent = "Northstar";
-  const badge = el("span", watching ? "rl-badge rl-badge--live" : "rl-badge");
-  badge.textContent = watching ? "● Watching" : isActive ? "Active" : "";
+  const badge = el("span", isActive ? "rl-badge rl-badge--live" : "rl-badge");
+  badge.textContent = isActive ? "Active" : "";
   header.append(wordmark, badge);
 
   const body = el("div", "rl-body");
@@ -80,38 +95,38 @@ function render(app: HTMLElement, state: State): void {
   activateBtn.textContent = isActive ? "Deactivate" : "Activate";
   activateBtn.addEventListener("click", async () => {
     activateBtn.disabled = true;
+    if (!isActive && !(await ensureLoopbackAccess())) {
+      activateBtn.disabled = false;
+      return;
+    }
     await send({ type: "set-overlay", tabId, on: !isActive });
     window.close();
   });
 
   activateRow.append(activateText, activateBtn);
+  body.append(activateRow, el("div", "rl-divider"), statusRow(reachable, terminal));
 
-  const divider1 = el("div", "rl-divider");
-
-  const tips = el("div", "rl-tips");
-  const tipsTitle = el("div", "rl-tips-title");
-  tipsTitle.textContent = "How it works";
-  tips.append(
-    tipsTitle,
-    tipItem(1, "Activate on your local dev page."),
-    tipItem(2, "Click any element to leave a comment."),
-    tipItem(3, 'Hit "Send to AI" to flush your batch.'),
-    tipItem(4, "Paste the command into your AI assistant."),
-  );
-
-  body.append(activateRow, divider1, tips);
-
-  app.append(header, body);
+  app.replaceChildren(header, body);
 }
 
-function tipItem(num: number, text: string): HTMLElement {
-  const tip = el("div", "rl-tip");
-  const n = el("span", "rl-tip-num");
-  n.textContent = String(num);
-  const t = el("span", "");
-  t.textContent = text;
-  tip.append(n, t);
-  return tip;
+function statusRow(reachable: boolean, terminal: QueueStatus["terminal"]): HTMLElement {
+  const wrap = el("div", "rl-status");
+  const label = el("div", "rl-status-label");
+  const sub = el("div", "rl-status-sub");
+
+  if (!reachable) {
+    label.textContent = "No project connected";
+    sub.textContent = "Start your AI agent in the project you are commenting on.";
+  } else if (terminal?.available) {
+    label.textContent = "Ready";
+    sub.textContent = `Send to AI types straight into your ${terminal.driver} session.`;
+  } else {
+    label.textContent = "Connected, but no terminal";
+    sub.textContent = terminal?.reason ?? "Northstar cannot reach the terminal your agent runs in.";
+  }
+
+  wrap.append(label, sub);
+  return wrap;
 }
 
 function el(tag: string, className: string): HTMLElement {

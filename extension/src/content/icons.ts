@@ -11,16 +11,17 @@ import iconShare from "@material-symbols/svg-400/rounded/share.svg?raw";
 import iconTextFields from "@material-symbols/svg-400/rounded/text_fields.svg?raw";
 import iconWarning from "@material-symbols/svg-400/rounded/warning.svg?raw";
 
+const parser = new DOMParser();
+
 export function icon(raw: string, className: string): SVGSVGElement {
-  const tpl = document.createElement("template");
-  tpl.innerHTML = raw;
-  const svg = tpl.content.firstElementChild as SVGSVGElement;
+  const doc = parser.parseFromString(raw, "image/svg+xml");
+  const svg = doc.documentElement as unknown as SVGSVGElement;
   svg.setAttribute("class", className);
   svg.setAttribute("fill", "currentColor");
   svg.setAttribute("aria-hidden", "true");
   svg.removeAttribute("width");
   svg.removeAttribute("height");
-  return svg;
+  return document.importNode(svg, true);
 }
 
 export {

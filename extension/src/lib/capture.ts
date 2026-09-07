@@ -1,4 +1,5 @@
 import type { Rect } from "../types.js";
+import { browser } from "./browser.js";
 
 const PADDING_CSS = 16;
 
@@ -7,7 +8,7 @@ export async function captureRegion(
   rect: Rect,
   dpr: number,
 ): Promise<string> {
-  const full = await chrome.tabs.captureVisibleTab(windowId ?? chrome.windows.WINDOW_ID_CURRENT, {
+  const full = await browser.tabs.captureVisibleTab(windowId ?? browser.windows.WINDOW_ID_CURRENT, {
     format: "png",
   });
   const bitmap = await createImageBitmap(await (await fetch(full)).blob());

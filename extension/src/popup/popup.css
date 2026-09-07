@@ -107,44 +107,22 @@ body {
   margin: 0 -16px;
 }
 
-.rl-tips {
+.rl-status {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
-.rl-tips-title {
-  font-size: var(--cc-fs-sm);
-  font-weight: 500;
-  color: var(--cc-text-2);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 2px;
-}
-
-.rl-tip {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  color: var(--cc-text-2);
+.rl-status-label {
   font-size: var(--cc-fs-base);
-  line-height: 1.5;
+  font-weight: 500;
+  color: var(--cc-text);
 }
 
-.rl-tip-num {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--cc-muted);
-  border: 1px solid var(--cc-border);
+.rl-status-sub {
   font-size: var(--cc-fs-sm);
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--cc-text);
-  margin-top: 2px;
+  color: var(--cc-text-2);
+  line-height: 1.5;
 }
 
 .rl-unavailable {
