@@ -4,6 +4,68 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-09-07
+
+A rework around a single idea: **Send to AI** is the only thing that starts work.
+
+### Changed
+
+- **BREAKING: the watch loop is gone.** There is no session to pair and no command
+  to paste. When you click **Send to AI**, the server types one line into the
+  terminal your assistant is already running in and presses Enter. Because the
+  path is plain keystrokes, Claude Code, Codex and Gemini all work identically.
+  Supported terminals are tmux, iTerm2 and Terminal.app.
+- **BREAKING: 11 MCP tools become 6.** `bind_session`, `unbind_session`,
+  `wait_for_update`, `list_rating_requests` and `submit_rating` are removed, along
+  with the `watch` prompt.
+- **BREAKING: `POST /comments` takes the whole batch** as an array in one request,
+  and answers `{ ids, typed, reason? }`. A ten-comment send used to be ten
+  requests that woke the assistant up to ten times.
+- **BREAKING: the session token and HMAC handshake are gone**, along with
+  `/handshake`, `/ping`, `/wait` and `/ratings`. Loopback binding, the Origin and
+  Host allowlists, the body cap and schema validation all stay. See
+  [SECURITY.md](./SECURITY.md) for what this trade does and does not cover.
+
+### Added
+
+- **Firefox support.** The extension builds for Gecko from the same source with
+  `npm run build:firefox` and passes `web-ext lint` with no errors. Firefox 128 is
+  the floor, set by the Popover API the overlay needs.
+- **Terminal controls.** `NORTHSTAR_TERMINAL` forces a driver, `NORTHSTAR_INJECT=0`
+  turns the typing off.
+
+### Fixed
+
+- **The overlay could be hidden by the page, making commenting impossible.** The
+  shadow host opened with `all: initial`, which resets `z-index` to `auto`, and
+  nothing set it back, so any positioned page element with a positive `z-index`
+  covered the whole overlay. The host now carries an explicit `z-index` and is
+  promoted into the browser's top layer, re-promoting whenever the page promotes
+  something after it and moving inside a page's modal dialog so it stays clickable
+  instead of being made inert.
+- **Edits from the drawer silently dropped their flags.** `onEdit` was declared
+  with two parameters but called with three, so `planFirst` and the screenshot
+  option were lost when a comment was edited from the drawer rather than the pin.
+- **`.env.example` documented `NORTHSTAR_PORTS`**, a variable the server never
+  read. The name is `NORTHSTAR_PORT`.
+
+### Removed
+
+- The design-score feature end to end: both MCP tools, the `/ratings` endpoints,
+  the ratings store, the drawer card, and the `northstar-design-score` skill.
+- The setup checklist in the toolbar and the four-step tutorial in the popup.
+- Dead message handlers `clear-comments` and `count-all`, and the unused store
+  helpers behind them.
+
+### Safety
+
+- The line typed into your terminal is a **fixed constant**. No comment text, id or
+  count reaches the terminal, so nothing arriving over loopback can change what
+  your assistant is told to do.
+- Northstar reads the visible pane before typing and refuses while a numbered
+  choice or yes/no prompt is showing, or if it cannot read the pane at all. Sends
+  landing within a few seconds of each other are coalesced into one line.
+
 ## [1.0.0] - 2026-06-17
 
 First public release.
