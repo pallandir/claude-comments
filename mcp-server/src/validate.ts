@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { IncomingComment, IncomingRatingRequest } from "./types.js";
+import type { IncomingComment } from "./types.js";
 
 const MAX_TEXT = 8_000;
 const MAX_SHORT = 2_000;
@@ -53,43 +53,20 @@ export const incomingCommentSchema = z
     metadata: metadataSchema,
     source: sourceSchema.nullish(),
     screenshotDataUrl: screenshotSchema,
-    sessionId: z.string().max(MAX_SHORT).optional(),
     planFirst: z.boolean().optional(),
   })
   .strict();
+
+const MAX_BATCH = 200;
+
+export const incomingBatchSchema = z.array(incomingCommentSchema).min(1).max(MAX_BATCH);
 
 export function parseIncoming(raw: string): IncomingComment {
   return incomingCommentSchema.parse(JSON.parse(raw)) as IncomingComment;
 }
 
-export const incomingRatingRequestSchema = z
-  .object({
-    url: z.string().max(MAX_URL),
-    screenshotDataUrl: screenshotSchema,
-    sessionId: z.string().max(MAX_SHORT).optional(),
-  })
-  .strict();
-
-export function parseRatingRequest(raw: string): IncomingRatingRequest {
-  return incomingRatingRequestSchema.parse(JSON.parse(raw)) as IncomingRatingRequest;
+export function parseBatch(raw: string): IncomingComment[] {
+  const parsed: unknown = JSON.parse(raw);
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  return incomingBatchSchema.parse(items) as IncomingComment[];
 }
-
-const ratingSectionSchema = z
-  .object({
-    key: z.enum(["typography", "composition", "motion", "color", "details"]),
-    label: z.string().max(MAX_SHORT),
-    score: z.number().int().min(0).max(100),
-    advice: z.string().max(MAX_TEXT),
-  })
-  .strict();
-
-export const ratingResultSchema = z
-  .object({
-    score: z.number().int().min(0).max(100),
-    ui: z.number().int().min(0).max(100),
-    ux: z.number().int().min(0).max(100),
-    coherence: z.number().int().min(0).max(100),
-    notes: z.string().max(MAX_TEXT),
-    sections: z.array(ratingSectionSchema).max(5),
-  })
-  .strict();

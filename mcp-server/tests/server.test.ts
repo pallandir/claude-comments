@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, mock, test } from "node:test";
+import { afterEach, beforeEach, test } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { Broker } from "../src/broker.js";
@@ -72,100 +72,6 @@ test("list_comments returns all comments and filters by status", async () => {
   const open = await client.callTool({ name: "list_comments", arguments: { status: "open" } });
   assert.ok(text(open).includes("second open"));
   assert.ok(!text(open).includes("resolved"));
-});
-
-test("bind_session returns bound:true on first bind", async () => {
-  const result = await client.callTool({
-    name: "bind_session",
-    arguments: { sessionId: "my-token" },
-  });
-  const parsed = JSON.parse(text(result));
-  assert.equal(parsed.bound, true);
-});
-
-test("bind_session returns bound:true when re-binding the same token", async () => {
-  await client.callTool({ name: "bind_session", arguments: { sessionId: "my-token" } });
-  const result = await client.callTool({
-    name: "bind_session",
-    arguments: { sessionId: "my-token" },
-  });
-  const parsed = JSON.parse(text(result));
-  assert.equal(parsed.bound, true);
-});
-
-test("bind_session returns bound:false when a different token tries to steal the session", async () => {
-  await client.callTool({ name: "bind_session", arguments: { sessionId: "owner-token" } });
-  const result = await client.callTool({
-    name: "bind_session",
-    arguments: { sessionId: "thief-token" },
-  });
-  const parsed = JSON.parse(text(result));
-  assert.equal(parsed.bound, false);
-  assert.ok(typeof parsed.reason === "string");
-});
-
-test("unbind_session allows a new token to bind afterwards", async () => {
-  await client.callTool({ name: "bind_session", arguments: { sessionId: "original" } });
-  await client.callTool({ name: "unbind_session", arguments: {} });
-  const result = await client.callTool({
-    name: "bind_session",
-    arguments: { sessionId: "new-token" },
-  });
-  const parsed = JSON.parse(text(result));
-  assert.equal(parsed.bound, true);
-});
-
-test("wait_for_update resolves immediately when version has already advanced", async () => {
-  broker.bump();
-  const v0 = broker.currentVersion - 1;
-  const result = await client.callTool({
-    name: "wait_for_update",
-    arguments: { sinceVersion: v0, timeoutMs: 5000 },
-  });
-  const parsed = JSON.parse(text(result));
-  assert.ok(typeof parsed.version === "number");
-  assert.ok(typeof parsed.openComments === "number");
-});
-
-test("wait_for_update times out and returns current state", async () => {
-  const v = broker.currentVersion;
-  const start = Date.now();
-  const result = await client.callTool({
-    name: "wait_for_update",
-    arguments: { sinceVersion: v, timeoutMs: 1000 },
-  });
-  assert.ok(Date.now() - start >= 900, "should have waited ~1 second");
-  const parsed = JSON.parse(text(result));
-  assert.ok(typeof parsed.version === "number");
-});
-
-test("wait_for_update signals stop and unbinds when the extension heartbeat lapses", async () => {
-  mock.timers.enable({ apis: ["Date"] });
-  try {
-    broker.bindSession("owner-token");
-    mock.timers.tick(91_000);
-    const result = await client.callTool({
-      name: "wait_for_update",
-      arguments: { timeoutMs: 1000 },
-    });
-    const parsed = JSON.parse(text(result));
-    assert.equal(parsed.stop, true);
-    assert.equal(parsed.bound, false);
-    assert.equal(broker.verifyToken("owner-token"), false);
-  } finally {
-    mock.timers.reset();
-  }
-});
-
-test("wait_for_update does not stop a freshly bound session that has not pinged", async () => {
-  broker.bindSession("owner-token");
-  const result = await client.callTool({
-    name: "wait_for_update",
-    arguments: { sinceVersion: broker.currentVersion - 1, timeoutMs: 1000 },
-  });
-  const parsed = JSON.parse(text(result));
-  assert.equal(parsed.stop, false);
-  assert.equal(broker.verifyToken("owner-token"), true);
 });
 
 test("resolve_comment updates a comment's status", async () => {
@@ -241,82 +147,6 @@ test("list_deferred returns deferred entries after deferring", async () => {
   assert.ok(text(result).includes("too complex"));
 });
 
-test("list_rating_requests returns empty then a pending request", async () => {
-  const empty = await client.callTool({ name: "list_rating_requests", arguments: {} });
-  assert.ok(text(empty).includes("No rating"));
-
-  await store.addRatingRequest({
-    url: "http://localhost:3000/",
-    screenshotDataUrl: null,
-    sessionId: "s1",
-  });
-  const result = await client.callTool({ name: "list_rating_requests", arguments: {} });
-  assert.ok(text(result).includes("pending"));
-  assert.ok(text(result).includes("localhost:3000"));
-});
-
-test("submit_rating scores a pending rating request", async () => {
-  const req = await store.addRatingRequest({
-    url: "http://localhost:3000/",
-    screenshotDataUrl: null,
-    sessionId: "s1",
-  });
-  const sections = [
-    { key: "typography", label: "Typography", score: 80, advice: "Increase type scale contrast." },
-    { key: "composition", label: "Composition", score: 75, advice: "Introduce more asymmetry." },
-    {
-      key: "motion",
-      label: "Motion & Interaction",
-      score: 70,
-      advice: "Add scroll-reveal animations.",
-    },
-    {
-      key: "color",
-      label: "Color & Atmosphere",
-      score: 78,
-      advice: "Own the palette more boldly.",
-    },
-    {
-      key: "details",
-      label: "Details & Craft",
-      score: 72,
-      advice: "Refine hover states throughout.",
-    },
-  ];
-  const result = await client.callTool({
-    name: "submit_rating",
-    arguments: {
-      id: req.id,
-      score: 75,
-      ui: 80,
-      ux: 70,
-      coherence: 78,
-      notes: "Good overall",
-      sections,
-    },
-  });
-  assert.ok(text(result).includes("75"));
-  const after = await store.getRatingRequest(req.id);
-  assert.equal(after?.status, "scored");
-  assert.equal(after?.result?.score, 75);
-  assert.equal(after?.result?.sections?.length, 5);
-});
-
-test("submit_rating returns not-found for unknown id", async () => {
-  const sections = [
-    { key: "typography", label: "Typography", score: 50, advice: "n/a" },
-    { key: "composition", label: "Composition", score: 50, advice: "n/a" },
-    { key: "motion", label: "Motion & Interaction", score: 50, advice: "n/a" },
-    { key: "color", label: "Color & Atmosphere", score: 50, advice: "n/a" },
-    { key: "details", label: "Details & Craft", score: 50, advice: "n/a" },
-  ];
-  const result = await client.callTool({
-    name: "submit_rating",
-    arguments: { id: "no-such", score: 50, ui: 50, ux: 50, coherence: 50, notes: "n/a", sections },
-  });
-  assert.ok(text(result).includes("no-such"));
-});
-
 test("clear_resolved removes non-open comments and reports the count", async () => {
   const a = await store.add(sample());
   const b = await store.add(sample({ comment: "second" }));
@@ -328,4 +158,20 @@ test("clear_resolved removes non-open comments and reports the count", async () 
   assert.ok(text(result).includes("2"));
   assert.equal((await store.list()).length, 1);
   assert.equal((await store.list())[0].comment, "still open");
+});
+
+test("the server exposes exactly the six comment tools", async () => {
+  const { tools } = await client.listTools();
+  assert.deepEqual(tools.map((t) => t.name).sort(), [
+    "clear_resolved",
+    "defer_comment",
+    "list_comments",
+    "list_deferred",
+    "resolve_comment",
+    "resolve_comments",
+  ]);
+});
+
+test("the watch prompt is gone", async () => {
+  await assert.rejects(() => client.listPrompts());
 });

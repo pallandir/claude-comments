@@ -4,20 +4,42 @@ import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { type IngestServer, hmacHex, startIngestServer } from "../src/http.js";
+import { Broker } from "../src/broker.js";
+import { type IngestServer, startIngestServer } from "../src/http.js";
 import { CommentStore } from "../src/store.js";
+import type { Handoff, HandoffResult, TerminalStatus } from "../src/terminal/index.js";
 
 let server: IngestServer;
 let root: string;
-const TEST_TOKEN = "test-token-secret";
 
-const validBody = JSON.stringify({
-  comment: "tweak this",
-  operation: { type: "comment", property: null, from: null, to: null },
-  operator: "/html/body/main[1]",
-  url: "http://localhost:3000/",
-  metadata: { page: "/", viewport: { w: 800, h: 600 }, elementText: "hi" },
-});
+class FakeHandoff implements Handoff {
+  sends = 0;
+  result: HandoffResult = { typed: true, driver: "tmux" };
+
+  async describe(): Promise<TerminalStatus> {
+    return { available: true, driver: "tmux" };
+  }
+
+  async send(): Promise<HandoffResult> {
+    this.sends += 1;
+    return this.result;
+  }
+}
+
+let handoff: FakeHandoff;
+
+function comment(overrides: Record<string, unknown> = {}) {
+  return {
+    comment: "tweak this",
+    operation: { type: "comment", property: null, from: null, to: null },
+    operator: "/html/body/main[1]",
+    url: "http://localhost:3000/",
+    metadata: { page: "/", viewport: { w: 800, h: 600 }, elementText: "hi" },
+    ...overrides,
+  };
+}
+
+const validBody = JSON.stringify([comment()]);
 
 interface Reply {
   status: number;
@@ -51,14 +73,17 @@ const ext = "chrome-extension://abc";
 function loopbackHost(): string {
   return `127.0.0.1:${server.port}`;
 }
-function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return { Host: loopbackHost(), Origin: ext, "X-Northstar-Token": TEST_TOKEN, ...extra };
+function headers(extra: Record<string, string> = {}): Record<string, string> {
+  return { Host: loopbackHost(), Origin: ext, ...extra };
+}
+function jsonHeaders(): Record<string, string> {
+  return headers({ "Content-Type": "application/json" });
 }
 
 before(async () => {
   root = await mkdtemp(join(tmpdir(), "northstar-http-"));
-  server = await startIngestServer(new CommentStore(root), [0], () => {});
-  server.broker.bindSession(TEST_TOKEN);
+  handoff = new FakeHandoff();
+  server = await startIngestServer(new CommentStore(root), [0], () => {}, new Broker(), handoff);
 });
 
 after(async () => {
@@ -67,7 +92,7 @@ after(async () => {
 });
 
 test("/health identifies the service to the extension", async () => {
-  const res = await call("GET", "/health", { Host: loopbackHost(), Origin: ext });
+  const res = await call("GET", "/health", headers());
   assert.equal(res.status, 200);
   const body = JSON.parse(res.body);
   assert.equal(body.ok, true);
@@ -77,11 +102,11 @@ test("/health identifies the service to the extension", async () => {
   assert.equal(typeof body.pid, "number");
 });
 
-test("/health does not leak session tokens", async () => {
-  const res = await call("GET", "/health", { Host: loopbackHost(), Origin: ext });
+test("/health reports whether the terminal handoff is available", async () => {
+  const res = await call("GET", "/health", headers());
   const body = JSON.parse(res.body);
-  assert.equal(body.expectedSession, undefined);
-  assert.equal(body.boundSession, undefined);
+  assert.equal(body.terminal.available, true);
+  assert.equal(body.terminal.driver, "tmux");
 });
 
 test("rejects a web-page origin (CSRF / prompt-injection channel)", async () => {
@@ -99,51 +124,50 @@ test("rejects a non-loopback Host header (DNS rebinding)", async () => {
   assert.equal(res.status, 403);
 });
 
-test("data endpoints return 401 without a token", async () => {
-  const res = await call(
-    "POST",
-    "/comments",
-    { Host: loopbackHost(), Origin: ext, "Content-Type": "application/json" },
-    validBody,
-  );
-  assert.equal(res.status, 401);
+test("accepts a batch from the extension origin and reports the handoff", async () => {
+  const before = handoff.sends;
+  const res = await call("POST", "/comments", jsonHeaders(), validBody);
+  assert.equal(res.status, 201);
+  const body = JSON.parse(res.body);
+  assert.equal(body.ids.length, 1);
+  assert.equal(body.typed, true);
+  assert.equal(handoff.sends, before + 1);
 });
 
-test("data endpoints return 401 with a wrong token", async () => {
+test("a multi-comment batch is one request and one handoff", async () => {
+  const before = handoff.sends;
   const res = await call(
     "POST",
     "/comments",
-    {
-      Host: loopbackHost(),
-      Origin: ext,
-      "Content-Type": "application/json",
-      "X-Northstar-Token": "wrong",
-    },
-    validBody,
-  );
-  assert.equal(res.status, 401);
-});
-
-test("accepts a valid comment from the extension origin with correct token", async () => {
-  const res = await call(
-    "POST",
-    "/comments",
-    authHeaders({ "Content-Type": "application/json" }),
-    validBody,
+    jsonHeaders(),
+    JSON.stringify([comment(), comment({ comment: "and this" }), comment({ comment: "third" })]),
   );
   assert.equal(res.status, 201);
-  assert.equal(JSON.parse(res.body).status, "open");
+  assert.equal(JSON.parse(res.body).ids.length, 3);
+  assert.equal(handoff.sends, before + 1);
+});
+
+test("a bare object is accepted as a one-item batch", async () => {
+  const res = await call("POST", "/comments", jsonHeaders(), JSON.stringify(comment()));
+  assert.equal(res.status, 201);
+  assert.equal(JSON.parse(res.body).ids.length, 1);
+});
+
+test("a failed handoff still stores the batch and reports the reason", async () => {
+  handoff.result = { typed: false, reason: "no supported terminal detected" };
+  const res = await call("POST", "/comments", jsonHeaders(), validBody);
+  assert.equal(res.status, 201);
+  const body = JSON.parse(res.body);
+  assert.equal(body.typed, false);
+  assert.equal(body.reason, "no supported terminal detected");
+  assert.equal(body.ids.length, 1);
+  handoff.result = { typed: true, driver: "tmux" };
 });
 
 test("rejects a malformed payload with 400 and stays up", async () => {
-  const res = await call(
-    "POST",
-    "/comments",
-    authHeaders({ "Content-Type": "application/json" }),
-    "{ not json",
-  );
+  const res = await call("POST", "/comments", jsonHeaders(), "{ not json");
   assert.equal(res.status, 400);
-  const health = await call("GET", "/health", { Host: loopbackHost(), Origin: ext });
+  const health = await call("GET", "/health", headers());
   assert.equal(health.status, 200);
 });
 
@@ -151,91 +175,59 @@ test("rejects a comment missing required fields", async () => {
   const res = await call(
     "POST",
     "/comments",
-    authHeaders({ "Content-Type": "application/json" }),
-    JSON.stringify({ comment: "no operator or metadata" }),
+    jsonHeaders(),
+    JSON.stringify([{ comment: "no operator or metadata" }]),
   );
   assert.equal(res.status, 400);
 });
 
-test("/handshake returns valid HMAC when token is bound", async () => {
-  const nonce = "test-nonce-12345";
-  const res = await call(
-    "POST",
-    "/handshake",
-    { Host: loopbackHost(), Origin: ext, "Content-Type": "application/json" },
-    JSON.stringify({ nonce }),
-  );
-  assert.equal(res.status, 200);
-  const body = JSON.parse(res.body);
-  const expected = hmacHex(TEST_TOKEN, nonce);
-  assert.equal(body.hmac, expected);
+test("a bad payload never reaches the terminal", async () => {
+  const before = handoff.sends;
+  await call("POST", "/comments", jsonHeaders(), "{ not json");
+  assert.equal(handoff.sends, before);
 });
 
-test("/handshake returns 401 when no token is bound", async () => {
-  const root2 = await mkdtemp(join(tmpdir(), "northstar-http2-"));
-  const unbound = await startIngestServer(new CommentStore(root2), [0], () => {});
-  try {
-    const res = await new Promise<Reply>((resolve, reject) => {
-      const req = httpRequest(
-        {
-          host: "127.0.0.1",
-          port: unbound.port,
-          method: "POST",
-          path: "/handshake",
-          headers: {
-            Host: `127.0.0.1:${unbound.port}`,
-            Origin: ext,
-            "Content-Type": "application/json",
-          },
-        },
-        (r) => {
-          let data = "";
-          r.on("data", (c) => {
-            data += c;
-          });
-          r.on("end", () => resolve({ status: r.statusCode ?? 0, body: data }));
-        },
-      );
-      req.on("error", reject);
-      req.write(JSON.stringify({ nonce: "n" }));
-      req.end();
-    });
-    assert.equal(res.status, 401);
-  } finally {
-    await unbound.close();
-    await rm(root2, { recursive: true, force: true });
-  }
+test("an empty batch is rejected", async () => {
+  const res = await call("POST", "/comments", jsonHeaders(), "[]");
+  assert.equal(res.status, 400);
 });
 
 test("DELETE /comments without url or all=true returns 400", async () => {
-  const res = await call("DELETE", "/comments", authHeaders());
+  const res = await call("DELETE", "/comments", headers());
   assert.equal(res.status, 400);
 });
 
 test("DELETE /comments?all=true clears all comments", async () => {
-  await call("POST", "/comments", authHeaders({ "Content-Type": "application/json" }), validBody);
-  const res = await call("DELETE", "/comments?all=true", authHeaders());
+  await call("POST", "/comments", jsonHeaders(), validBody);
+  const res = await call("DELETE", "/comments?all=true", headers());
   assert.equal(res.status, 200);
   assert.equal(JSON.parse(res.body).removed >= 0, true);
 });
 
 test("DELETE /comments?url= clears only the matching url", async () => {
   const url = encodeURIComponent("http://localhost:3000/");
-  const res = await call("DELETE", `/comments?url=${url}`, authHeaders());
+  const res = await call("DELETE", `/comments?url=${url}`, headers());
   assert.equal(res.status, 200);
 });
 
 test("unknown route returns 404", async () => {
-  const res = await call("GET", "/no-such-route", authHeaders());
+  const res = await call("GET", "/no-such-route", headers());
   assert.equal(res.status, 404);
 });
 
-test("OPTIONS preflight returns 204 and CORS headers", async () => {
-  const res = await call("OPTIONS", "/comments", {
-    Host: loopbackHost(),
-    Origin: ext,
-    "Access-Control-Request-Method": "POST",
-  });
+test("the removed watch and auth routes are gone", async () => {
+  for (const path of ["/ping", "/wait", "/ratings", "/handshake"]) {
+    const res = await call("GET", path, headers());
+    assert.equal(res.status, 404, `${path} should be gone`);
+  }
+});
+
+test("OPTIONS preflight returns 204", async () => {
+  const res = await call(
+    "OPTIONS",
+    "/comments",
+    headers({ "Access-Control-Request-Method": "POST" }),
+  );
   assert.equal(res.status, 204);
 });
 
@@ -244,58 +236,30 @@ test("null Origin (local file or same-origin fetch) is allowed", async () => {
   assert.equal(res.status, 200);
 });
 
-test("absent Origin is allowed (same-origin service worker fetch)", async () => {
+test("absent Origin is allowed (same-origin background fetch)", async () => {
   const res = await call("GET", "/health", { Host: loopbackHost() });
   assert.equal(res.status, 200);
 });
 
-test("GET /state returns version, comments and watching flag", async () => {
-  const res = await call("GET", "/state", authHeaders());
+test("a moz-extension origin is allowed so Firefox can reach the server", async () => {
+  const res = await call("GET", "/health", { Host: loopbackHost(), Origin: "moz-extension://abc" });
+  assert.equal(res.status, 200);
+});
+
+test("GET /state returns version, comments, notices and terminal status", async () => {
+  const res = await call("GET", "/state", headers());
   assert.equal(res.status, 200);
   const body = JSON.parse(res.body);
   assert.equal(typeof body.version, "number");
   assert.ok(Array.isArray(body.comments));
-  assert.equal(typeof body.watching, "boolean");
-});
-
-test("GET /ping returns live status and records the extension heartbeat", async () => {
-  const res = await call("GET", "/ping", authHeaders());
-  assert.equal(res.status, 200);
-  const body = JSON.parse(res.body);
-  assert.equal(typeof body.version, "number");
-  assert.equal(typeof body.watching, "boolean");
   assert.ok(Array.isArray(body.notices));
-  assert.equal(server.broker.isExtensionAlive(60_000), true);
-});
-
-test("GET /ping requires the bearer token", async () => {
-  const res = await call("GET", "/ping", { Host: loopbackHost(), Origin: ext });
-  assert.equal(res.status, 401);
-});
-
-test("GET /wait resolves immediately when version has already advanced", async () => {
-  const res = await call("GET", "/wait?since=0", authHeaders());
-  assert.equal(res.status, 200);
-  const body = JSON.parse(res.body);
-  assert.equal(typeof body.version, "number");
-  assert.ok(body.version > 0);
+  assert.equal(body.terminal.available, true);
 });
 
 test("POST /comments/reopen reopens a resolved comment", async () => {
-  const post = await call(
-    "POST",
-    "/comments",
-    authHeaders({ "Content-Type": "application/json" }),
-    validBody,
-  );
-  const { id } = JSON.parse(post.body);
-
-  const res = await call(
-    "POST",
-    "/comments/reopen",
-    authHeaders({ "Content-Type": "application/json" }),
-    JSON.stringify({ id }),
-  );
+  const post = await call("POST", "/comments", jsonHeaders(), validBody);
+  const { ids } = JSON.parse(post.body);
+  const res = await call("POST", "/comments/reopen", jsonHeaders(), JSON.stringify({ id: ids[0] }));
   assert.equal(res.status, 200);
 });
 
@@ -303,7 +267,7 @@ test("POST /comments/reopen returns 400 when id is missing", async () => {
   const res = await call(
     "POST",
     "/comments/reopen",
-    authHeaders({ "Content-Type": "application/json" }),
+    jsonHeaders(),
     JSON.stringify({ note: "no id here" }),
   );
   assert.equal(res.status, 400);
@@ -313,7 +277,7 @@ test("POST /comments/reopen returns 404 for an unknown id", async () => {
   const res = await call(
     "POST",
     "/comments/reopen",
-    authHeaders({ "Content-Type": "application/json" }),
+    jsonHeaders(),
     JSON.stringify({ id: "no-such-id" }),
   );
   assert.equal(res.status, 404);
@@ -329,7 +293,7 @@ test("POST /notices/dismiss removes the notice from the broker", async () => {
   const res = await call(
     "POST",
     "/notices/dismiss",
-    authHeaders({ "Content-Type": "application/json" }),
+    jsonHeaders(),
     JSON.stringify({ commentId: "c1" }),
   );
   assert.equal(res.status, 200);
@@ -337,51 +301,16 @@ test("POST /notices/dismiss removes the notice from the broker", async () => {
 });
 
 test("POST /notices/dismiss returns 400 when commentId is missing", async () => {
-  const res = await call(
-    "POST",
-    "/notices/dismiss",
-    authHeaders({ "Content-Type": "application/json" }),
-    JSON.stringify({}),
-  );
+  const res = await call("POST", "/notices/dismiss", jsonHeaders(), JSON.stringify({}));
   assert.equal(res.status, 400);
 });
 
-test("GET /ratings returns an array", async () => {
-  const res = await call("GET", "/ratings", authHeaders());
-  assert.equal(res.status, 200);
-  assert.ok(Array.isArray(JSON.parse(res.body)));
-});
-
-test("POST /ratings creates a rating request and GET /ratings returns it", async () => {
-  const post = await call(
-    "POST",
-    "/ratings",
-    authHeaders({ "Content-Type": "application/json" }),
-    JSON.stringify({ url: "http://localhost:3000/", screenshotDataUrl: null }),
-  );
-  assert.equal(post.status, 201);
-  const { id } = JSON.parse(post.body);
-  assert.equal(typeof id, "string");
-
-  const get = await call("GET", "/ratings", authHeaders());
-  const list = JSON.parse(get.body);
-  assert.ok(list.some((r: { id: string }) => r.id === id));
-});
-
 test("source.path with traversal segments is rejected with 400", async () => {
-  const body = JSON.stringify({
-    comment: "test traversal",
-    operation: { type: "comment", property: null, from: null, to: null },
-    operator: "/html/body",
-    url: "http://localhost:3000/",
-    metadata: { page: "/", viewport: { w: 800, h: 600 }, elementText: "" },
-    source: { path: "../../etc/passwd", line: 1, column: 0, via: "react-dev-inspector" },
-  });
-  const res = await call(
-    "POST",
-    "/comments",
-    authHeaders({ "Content-Type": "application/json" }),
-    body,
-  );
+  const body = JSON.stringify([
+    comment({
+      source: { path: "../../etc/passwd", line: 1, column: 0, via: "react-dev-inspector" },
+    }),
+  ]);
+  const res = await call("POST", "/comments", jsonHeaders(), body);
   assert.equal(res.status, 400);
 });
