@@ -35,7 +35,6 @@ export interface DraftRequest {
   metadata: CommentMetadata;
   source: SourceLocation | null;
   screenshotDataUrl: string | null;
-  sessionId?: string;
   planFirst?: boolean;
 }
 

@@ -1,9 +1,8 @@
-import { createHmac } from "node:crypto";
 import { type IncomingMessage, type ServerResponse, createServer } from "node:http";
-import { Broker } from "./broker.js";
-import { HTTP_WAIT_TIMEOUT_MS, SESSION_ALIVE_TTL_MS } from "./config.js";
+import type { Broker } from "./broker.js";
 import type { CommentStore } from "./store.js";
-import { parseIncoming, parseRatingRequest } from "./validate.js";
+import type { Handoff } from "./terminal/index.js";
+import { parseBatch } from "./validate.js";
 
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const SERVICE = "northstar";
@@ -18,11 +17,12 @@ export async function startIngestServer(
   store: CommentStore,
   preferredPorts: number[],
   log: (msg: string) => void,
-  broker: Broker = new Broker(),
+  broker: Broker,
+  handoff: Handoff,
 ): Promise<IngestServer> {
   const server = createServer((req, res) => {
     const port = (server.address() as { port: number } | null)?.port ?? 0;
-    handle(req, res, store, log, port, broker).catch(() => {
+    handle(req, res, store, log, port, broker, handoff).catch(() => {
       if (!res.headersSent) json(res, 500, { error: "internal" });
     });
   });
@@ -34,18 +34,12 @@ export async function startIngestServer(
   };
 }
 
-// Only the browser extension (chrome-extension:// origin, or no Origin header at
-// all) may reach this listener. A web page the user happens to be visiting always
-// sends its own http(s) Origin on a cross-origin fetch, so rejecting those closes
-// the prompt-injection / CSRF channel into the AI assistant's comment store.
-function originAllowed(origin: string | undefined): boolean {
+export function originAllowed(origin: string | undefined): boolean {
   if (!origin || origin === "null") return true;
   return origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://");
 }
 
-// Reject any Host header that is not loopback, defeating DNS-rebinding attacks
-// that point an attacker-controlled domain at 127.0.0.1.
-function hostAllowed(host: string | undefined, port: number): boolean {
+export function hostAllowed(host: string | undefined, port: number): boolean {
   if (!host) return false;
   const [name, hostPort] = host.split(":");
   if (hostPort && Number(hostPort) !== port) return false;
@@ -58,21 +52,7 @@ function setCors(res: ServerResponse, origin: string | undefined): void {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Northstar-Token");
-}
-
-// Verify the bearer token on state-changing / data endpoints. Routes exempt from
-// this check: OPTIONS, GET /health, POST /handshake (those are the probe/auth
-// path itself and must be reachable before a token is established).
-function authorized(req: IncomingMessage, broker: Broker): boolean {
-  const header = req.headers["x-northstar-token"];
-  const candidate = Array.isArray(header) ? header[0] : header;
-  if (!candidate) return false;
-  return broker.verifyToken(candidate);
-}
-
-export function hmacHex(key: string, message: string): string {
-  return createHmac("sha256", key).update(message).digest("hex");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
 async function handle(
@@ -82,6 +62,7 @@ async function handle(
   log: (msg: string) => void,
   port: number,
   broker: Broker,
+  handoff: Handoff,
 ): Promise<void> {
   const origin = req.headers.origin;
   setCors(res, origin);
@@ -99,7 +80,6 @@ async function handle(
   const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
 
   if (req.method === "GET" && pathname === "/health") {
-    const pendingRatings = (await store.listRatingRequests("pending")).length;
     json(res, 200, {
       ok: true,
       service: SERVICE,
@@ -108,69 +88,14 @@ async function handle(
       pid: broker.pid,
       version: broker.currentVersion,
       lastPolledAt: broker.lastPolledAt,
-      watching: broker.isBoundAlive(SESSION_ALIVE_TTL_MS),
       notices: broker.pendingNotices,
-      pendingRatings,
-    });
-    return;
-  }
-
-  // HMAC challenge-response: the extension sends a random nonce, the server
-  // signs it with the bound token. A port-squatting process cannot forge this
-  // because it never learns the token (it is delivered only over MCP stdio).
-  if (req.method === "POST" && pathname === "/handshake") {
-    try {
-      const body = await readBody(req);
-      const parsed = JSON.parse(body) as { nonce?: string };
-      if (!parsed.nonce || typeof parsed.nonce !== "string") {
-        json(res, 400, { error: "nonce required" });
-        return;
-      }
-      const token = broker.token;
-      if (!token) {
-        json(res, 401, { error: "no session bound" });
-        return;
-      }
-      json(res, 200, { hmac: hmacHex(token, parsed.nonce) });
-    } catch (err) {
-      log((err as Error).message);
-      json(res, 400, { error: "bad request" });
-    }
-    return;
-  }
-
-  // All routes below this point require a valid bearer token. A valid token means
-  // the request came from the paired extension, so any authenticated call is a
-  // liveness signal — the reverse heartbeat behind isExtensionAlive.
-  if (!authorized(req, broker)) {
-    json(res, 401, { error: "unauthorized" });
-    return;
-  }
-  broker.markExtensionSeen();
-
-  // The extension's steady poll: a lightweight live-status read (no comment list)
-  // so the toolbar reflects watching changes promptly. Being authenticated, it
-  // also refreshes the extension heartbeat via the gate above.
-  if (req.method === "GET" && pathname === "/ping") {
-    json(res, 200, {
-      version: broker.currentVersion,
-      watching: broker.isBoundAlive(SESSION_ALIVE_TTL_MS),
-      notices: broker.pendingNotices,
+      terminal: await handoff.describe(),
     });
     return;
   }
 
   if (req.method === "GET" && pathname === "/state") {
-    json(res, 200, await snapshot(store, broker));
-    return;
-  }
-
-  if (req.method === "GET" && pathname === "/wait") {
-    const raw = query(req.url, "since");
-    const since = raw === null ? broker.currentVersion : Number(raw);
-    const base = Number.isFinite(since) ? since : broker.currentVersion;
-    await broker.wait(base, HTTP_WAIT_TIMEOUT_MS);
-    json(res, 200, await snapshot(store, broker));
+    json(res, 200, await snapshot(store, broker, handoff));
     return;
   }
 
@@ -211,17 +136,23 @@ async function handle(
   }
 
   if (req.method === "POST" && pathname === "/comments") {
+    let ids: string[];
     try {
-      const body = await readBody(req);
-      const incoming = parseIncoming(body);
-      const comment = await store.add(incoming, store.root);
-      broker.bump();
-      log(`ingested comment ${comment.id} on ${comment.metadata.page}`);
-      json(res, 201, { id: comment.id, status: comment.status });
+      const incoming = parseBatch(await readBody(req));
+      ids = [];
+      for (const item of incoming) {
+        const comment = await store.add(item, store.root);
+        ids.push(comment.id);
+      }
     } catch (err) {
       log((err as Error).message);
       json(res, 400, { error: "bad request" });
+      return;
     }
+    broker.bump();
+    log(`ingested ${ids.length} comment(s): ${ids.join(", ")}`);
+    const result = await handoff.send();
+    json(res, 201, { ids, ...result });
     return;
   }
 
@@ -247,43 +178,16 @@ async function handle(
     return;
   }
 
-  if (req.method === "GET" && pathname === "/ratings") {
-    const url = query(req.url, "url");
-    const ratings = await store.listRatingRequests();
-    const filtered = url ? ratings.filter((r) => r.url === url) : ratings;
-    json(res, 200, filtered);
-    return;
-  }
-
-  if (req.method === "POST" && pathname === "/ratings") {
-    try {
-      const body = await readBody(req);
-      const incoming = parseRatingRequest(body);
-      const entry = await store.addRatingRequest(incoming);
-      broker.bump();
-      try {
-        log(`rating request ${entry.id} for ${new URL(incoming.url).pathname}`);
-      } catch {
-        log(`rating request ${entry.id}`);
-      }
-      json(res, 201, { id: entry.id, status: entry.status });
-    } catch (err) {
-      log((err as Error).message);
-      json(res, 400, { error: "bad request" });
-    }
-    return;
-  }
-
   json(res, 404, { error: "not found" });
 }
 
-async function snapshot(store: CommentStore, broker: Broker) {
+async function snapshot(store: CommentStore, broker: Broker, handoff: Handoff) {
   return {
     version: broker.currentVersion,
     lastPolledAt: broker.lastPolledAt,
     comments: await store.list(),
-    watching: broker.isBoundAlive(SESSION_ALIVE_TTL_MS),
     notices: broker.pendingNotices,
+    terminal: await handoff.describe(),
   };
 }
 

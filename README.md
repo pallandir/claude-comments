@@ -46,12 +46,15 @@
 
 ## What is Northstar
 
-**Northstar** is a Chromium extension paired with an MCP server. Click any element
+**Northstar** is a browser extension paired with an MCP server. Click any element
 on a running frontend, local or a remote preview, leave a structured comment
-anchored to it, and have your AI coding assistant pick up the list and implement
-the changes directly against your real source files. Nothing is sent to a remote
-backend; every comment travels over loopback between the browser and a server
-running on your own machine.
+anchored to it, then click **Send to AI**. Northstar types one line into the
+terminal your coding assistant is already running in and presses Enter, and the
+assistant implements the changes against your real source files.
+
+There is nothing to pair and no command to paste. Nothing is sent to a remote
+backend either: every comment travels over loopback between the browser and a
+server running on your own machine.
 
 ### Why "Northstar"?
 
@@ -67,10 +70,10 @@ gets there.
 | Need | Why | Required? |
 |---|---|---|
 | Node 20+ | runs the MCP server via `npx` | Yes |
-| An MCP-capable AI coding assistant | reads comments and edits your source (Claude Code, Cursor, Windsurf, or any MCP client) | Yes |
-| Chromium browser (Chrome, Edge, Brave, Arc) | extension | Yes |
+| An MCP-capable AI coding assistant | reads comments and edits your source (Claude Code, Codex, Gemini, or any MCP client) | Yes |
+| Chrome, Edge, Brave, Arc, or Firefox 128+ | extension | Yes |
+| Your assistant started in tmux, iTerm2, or Terminal.app | lets Send to AI type into it | Yes |
 | Framework inspector plugin | precise `file:line:column` mapping | Yes |
-| [`northstar-design-score` skill](./plugin/skills/northstar-design-score/SKILL.md) | purpose-fit page scoring | Optional |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -105,37 +108,38 @@ claude mcp add northstar -- npx -y @pallandir/northstar
 
 ### Step 2 · Install the browser extension
 
-Install Northstar from the Chrome Web Store and pin it to your toolbar. It runs in
-any Chromium browser (Chrome, Edge, Brave, Arc).
+Install Northstar and pin it to your toolbar.
 
 [**Add to Chrome →**](https://chromewebstore.google.com/detail/northstar/mmpgoabhnlkcgboiiaebeahcbbeeaggb)
 
+For Firefox, build it yourself until the AMO listing is up:
+
+```sh
+npm ci
+npm run build:firefox --workspace @northstar/extension
+```
+
+Then load `extension/dist-firefox` through `about:debugging` > This Firefox >
+Load Temporary Add-on. The first time you activate Northstar, Firefox asks for
+access to `localhost`. Grant it, or the extension cannot reach the server.
+
 ---
 
-### Step 3 · Connect the extension to your assistant
+### Step 3 · Start commenting
 
 Open your frontend on a `localhost` dev server, with your assistant running in
-the same repo, and click the Northstar toolbar icon to activate it on that tab.
-Copy the session id from the toolbar and have your assistant call `bind_session`
-with it. The session binds and Northstar starts watching for comments.
+the same repo **from a terminal**, and click the Northstar toolbar icon. Mark up
+the page, then click **Send to AI**.
 
-> [!WARNING]
-> **Run your assistant in auto mode.** The watch loop implements each batch of
-> comments the moment it syncs. For the tool to work best, run your assistant in
-> auto (accept-edits) mode so it applies changes without stopping to ask on every
-> edit.
->
-> - **Claude Code**: press `Shift+Tab` to cycle to "accept edits", or start with
->   `claude --permission-mode acceptEdits`.
-> - **Other assistants**: enable the equivalent auto or agent mode.
+That is the whole setup. Northstar finds the terminal your assistant runs in,
+waits for it to be idle, and types a one-line request followed by Enter.
 
----
-
-### Step 4 · Start commenting
-
-Mark up the page with the toolbar tools, then click **Send to AI**. Each batch
-you send is applied directly to your source by your assistant. See
-[Usage](#usage) for the full tour.
+> [!TIP]
+> **Run your assistant in auto mode** so it applies changes without stopping on
+> every edit. In Claude Code press `Shift+Tab` to cycle to "accept edits", or
+> start with `claude --permission-mode acceptEdits`. Northstar will not answer a
+> permission prompt for you: if one is on screen when you send, your comments are
+> saved and the toolbar tells you they were not announced.
 
 > [!IMPORTANT]
 > The comment store (`.northstar/design-comments.md`) and screenshots
@@ -148,27 +152,32 @@ you send is applied directly to your source by your assistant. See
 
 ```mermaid
 flowchart TD
-    A["Browser extension\n(Chromium MV3)"]
+    A["Browser extension\n(MV3, Chromium and Firefox)"]
     B["MCP server\n(127.0.0.1:7474)"]
     C["Comment store\n(.northstar/)"]
-    D["/mcp__northstar__watch\nwatch loop"]
-    E["Sub-agent\nedits source"]
+    D["Your terminal\n(tmux, iTerm2, Terminal.app)"]
+    E["Assistant\nedits source"]
 
     A -- "POST /comments\n(loopback only)" --> B
     B -- "writes" --> C
-    C -- "list_comments" --> D
-    D -- "spawns" --> E
-    E -- "resolve / defer" --> D
+    B -- "types one line + Enter" --> D
+    D --> E
+    C -- "list_comments" --> E
+    E -- "resolve / defer" --> C
 ```
 
 The extension activates per-tab when you click its toolbar icon. Each saved item
 carries a stable selector, visible text, computed styles, a cropped screenshot,
-and a precise `file:line:column` from the framework inspector plugin that
-anchors every edit to the right source location. On a `localhost` dev server the
-extension sends those comments directly to the MCP server running in your
-project. Your MCP client binds the session, watches for new batches, and applies
-each one against your real source files. Comments that need deeper thought are
-parked for later; a notice appears in the browser toolbar.
+and a precise `file:line:column` from the framework inspector plugin that anchors
+every edit to the right source location. On a `localhost` dev server the extension
+posts the whole batch to the MCP server running in your project, and the server
+types a one-line request into the terminal your assistant is running in. The
+assistant reads the batch through the MCP tools and applies it. Comments that need
+deeper thought are parked for later, and a notice appears in the browser toolbar.
+
+The line typed into your terminal is a fixed constant. Your comment text is never
+typed, it is read from the store, so nothing arriving over HTTP can influence what
+your assistant is told to do.
 
 For a deeper look at the architecture and the message flows, see the
 [docs folder](./docs).
@@ -196,9 +205,8 @@ Your assistant runs in the repo and comments flow to it live over loopback.
    are parked in `.northstar/northstar-deferred.md` and a notice appears in the
    toolbar.
 
-Any MCP client drives the loop with the raw tools: `bind_session`,
-`wait_for_update`, and `list_comments`. Keep your assistant in auto (accept-edits)
-mode so each synced batch is applied without a prompt on every edit.
+Keep your assistant in auto (accept-edits) mode so each batch is applied without a
+prompt on every edit.
 
 ### Offline · remote preview or no local project
 
@@ -235,25 +243,36 @@ Northstar's MCP server speaks standard MCP over stdio and works with any
 MCP-capable AI coding assistant, Claude Code, Cursor, Windsurf, and similar
 clients all connect the same way.
 
-The extension targets **Chromium Manifest V3**: Chrome, Edge, Brave, and Arc. A
-Firefox port is not yet available.
+The extension is Manifest V3 and builds for both engines: Chrome, Edge, Brave and
+Arc from `npm run build`, Firefox 128+ from `npm run build:firefox`. Firefox 128 is
+the floor because the overlay needs the Popover API to reach the top layer.
+
+### Terminals
+
+**Send to AI** types into the terminal your assistant runs in, so that terminal has
+to be one Northstar can drive.
+
+| Terminal | Support | Notes |
+|---|---|---|
+| tmux | Yes | Preferred whenever `TMUX_PANE` is set, and needs no OS permission |
+| iTerm2 | Yes | Prompts once for Automation access |
+| Terminal.app | Yes | Needs Accessibility permission in System Settings |
+| Anything else, including editor terminals | No | Comments are still saved, the toolbar says they were not announced |
+
+Set `NORTHSTAR_TERMINAL` to force a driver (`tmux`, `iterm`, `terminal-app`, or
+`none`), or `NORTHSTAR_INJECT=0` to turn the typing off entirely.
 
 ### MCP tools
 
-The server exposes 11 tools that any MCP client can call directly:
+The server exposes 6 tools that any MCP client can call directly:
 
 | Tool | Purpose |
 |---|---|
 | `list_comments` | List comments, optionally filtered by status (`open`, `resolved`, `wontfix`) |
-| `wait_for_update` | Long-poll until the store changes; heartbeats the session binding |
-| `bind_session` | Claim ownership of comment processing for this session |
-| `unbind_session` | Release ownership so another session can take over |
+| `resolve_comment` | Set the status of a single comment |
+| `resolve_comments` | Resolve or wontfix multiple comments in one call |
 | `defer_comment` | Park a comment for planning and notify the browser toolbar |
 | `list_deferred` | List comments that were deferred with their reasons |
-| `resolve_comment` | Set the status of a single comment |
-| `resolve_comments` | Batch-resolve multiple comments in one call |
-| `list_rating_requests` | List pending or scored page rating requests |
-| `submit_rating` | Submit an Awwwards-style score for a rating request |
 | `clear_resolved` | Remove all non-open comments from the store |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -263,10 +282,23 @@ The server exposes 11 tools that any MCP client can call directly:
 <details>
 <summary><strong>I sent comments but the assistant never picked them up.</strong></summary>
 
-Comments only leave the browser when you click **Send to AI** in the toolbar.
-**Save** enqueues a comment locally, **Send** flushes the batch to the server.
-Make sure your assistant has bound the session with `bind_session` so it is
-watching.
+Comments only leave the browser when you click **Send to AI**. **Save** enqueues a
+comment locally, **Send** flushes the batch.
+
+If you did click Send, the toolbar tells you why nothing was typed. The usual
+reasons are that your assistant was showing a permission prompt (Northstar will not
+answer one for you, send again once it clears), or that it is running somewhere
+Northstar cannot type, such as an editor's built-in terminal. Start it from tmux,
+iTerm2 or Terminal.app instead.
+</details>
+
+<details>
+<summary><strong>Northstar typed the line but my assistant did not run it.</strong></summary>
+
+The Enter is sent as a separate keystroke a moment after the text, because assistant
+TUIs fold a return arriving inside a fast burst into the pasted text. If the line
+lands in the prompt but never submits, the terminal is probably still busy. Press
+Enter yourself and open an issue with your terminal and assistant versions.
 </details>
 
 <details>
@@ -290,14 +322,16 @@ the same range, so a busy port usually just works. To pin a specific port, set
 <details>
 <summary><strong>Can two projects run Northstar at once?</strong></summary>
 
-Not in v1. One project binds the port and the session at a time. Set a different
-`NORTHSTAR_PORT` per project if you need to switch between them.
+Each project's assistant starts its own server, and they take 7474, 7475 and 7476 in
+turn. The extension talks to the most recently started one, so switching projects
+works but commenting on two at the same time does not. Set a different
+`NORTHSTAR_PORT` per project if you need them pinned.
 </details>
 
 <details>
 <summary><strong>Where is my data stored, and does anything leave my machine?</strong></summary>
 
-Everything stays local. Queued comments live in the browser's `chrome.storage`;
+Everything stays local. Queued comments live in the browser's extension storage;
 once sent, they are written to a gitignored `.northstar/` folder at your project
 root. Nothing is sent to any remote server, and there is no analytics or
 telemetry. See [PRIVACY.md](./PRIVACY.md).
@@ -342,16 +376,15 @@ See [SECURITY.md](./SECURITY.md) for the full threat model and
 Removing Northstar is three independent steps; do the ones that apply to you.
 
 1. **Remove the browser extension.** Open `chrome://extensions`, find the
-   Northstar card, and click **Remove**. In Firefox-family builds, use
-   `about:addons`. This also clears the extension's local queue and stored
-   session token.
+   Northstar card, and click **Remove**. In Firefox, use `about:addons`. This also
+   clears the extension's local comment queue.
 
 2. **Remove the MCP server registration.** Delete the `northstar` entry from your
    assistant's MCP configuration.
 
 3. **Delete the local comment store.** The server writes everything into a
    gitignored `.northstar/` folder at your project root. Delete it to remove all
-   comments, deferrals, ratings, and screenshots:
+   comments, deferrals, and screenshots:
 
    ```sh
    rm -rf .northstar

@@ -2,100 +2,53 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Broker } from "../src/broker.js";
 
-test("bindSession accepts the first token unconditionally", () => {
-  const broker = new Broker();
-  const result = broker.bindSession("token-a");
-  assert.equal(result.ok, true);
-  assert.equal(result.reason, undefined);
-});
+function notice(id: string) {
+  return { commentId: id, page: "/", summary: "s", createdAt: new Date().toISOString() };
+}
 
-test("bindSession allows re-binding with the same token (idempotent refresh)", () => {
+test("version starts at 1 and advances on bump", () => {
   const broker = new Broker();
-  broker.bindSession("token-a");
-  const result = broker.bindSession("token-a");
-  assert.equal(result.ok, true);
-});
-
-test("bindSession rejects a different token while a live session is bound", () => {
-  const broker = new Broker();
-  broker.bindSession("token-a");
-  const result = broker.bindSession("token-b");
-  assert.equal(result.ok, false);
-  assert.ok(result.reason, "expected a reason string");
-});
-
-test("bindSession allows a new token after unbind", () => {
-  const broker = new Broker();
-  broker.bindSession("token-a");
-  broker.unbindSession();
-  const result = broker.bindSession("token-b");
-  assert.equal(result.ok, true);
-});
-
-test("verifyToken returns false when no session is bound", () => {
-  const broker = new Broker();
-  assert.equal(broker.verifyToken("anything"), false);
-});
-
-test("verifyToken returns true for the bound token", () => {
-  const broker = new Broker();
-  broker.bindSession("my-secret");
-  assert.equal(broker.verifyToken("my-secret"), true);
-});
-
-test("verifyToken returns false for a different string of same length", () => {
-  const broker = new Broker();
-  broker.bindSession("aaaaaaaaaa");
-  assert.equal(broker.verifyToken("bbbbbbbbbb"), false);
-});
-
-test("bindSession seeds the extension heartbeat so a fresh session is alive", () => {
-  const broker = new Broker();
-  broker.bindSession("token-a");
-  assert.equal(broker.isExtensionAlive(60_000), true);
-});
-
-test("isExtensionAlive is false when no session is bound", () => {
-  const broker = new Broker();
-  broker.markExtensionSeen();
-  assert.equal(broker.isExtensionAlive(60_000), false);
-});
-
-test("isExtensionAlive is true while the extension heartbeat is fresh", () => {
-  const broker = new Broker();
-  broker.bindSession("token-a");
-  broker.markExtensionSeen();
-  assert.equal(broker.isExtensionAlive(60_000), true);
-});
-
-test("isExtensionAlive is false once the heartbeat is older than the ttl", () => {
-  const broker = new Broker();
-  broker.bindSession("token-a");
-  broker.markExtensionSeen();
-  assert.equal(broker.isExtensionAlive(0), false);
-});
-
-test("unbindSession clears the extension heartbeat", () => {
-  const broker = new Broker();
-  broker.bindSession("token-a");
-  broker.markExtensionSeen();
-  broker.unbindSession();
-  assert.equal(broker.isExtensionAlive(60_000), false);
-});
-
-test("wait resolves immediately when version has advanced", async () => {
-  const broker = new Broker();
-  const v0 = broker.currentVersion;
+  assert.equal(broker.currentVersion, 1);
   broker.bump();
-  const resolved = await broker.wait(v0, 5000);
-  assert.equal(resolved, broker.currentVersion);
+  assert.equal(broker.currentVersion, 2);
 });
 
-test("wait times out and resolves with current version", async () => {
+test("markPolled records when the agent last read the store", () => {
   const broker = new Broker();
-  const v0 = broker.currentVersion;
-  const start = Date.now();
-  const resolved = await broker.wait(v0, 50);
-  assert.ok(Date.now() - start >= 40, "should have waited ~50ms");
-  assert.equal(resolved, v0);
+  assert.equal(broker.lastPolledAt, null);
+  broker.markPolled();
+  assert.equal(typeof broker.lastPolledAt, "string");
+});
+
+test("pushNotice queues a notice and bumps the version", () => {
+  const broker = new Broker();
+  const before = broker.currentVersion;
+  broker.pushNotice(notice("c1"));
+  assert.equal(broker.pendingNotices.length, 1);
+  assert.ok(broker.currentVersion > before);
+});
+
+test("notices are newest first and capped at 20", () => {
+  const broker = new Broker();
+  for (let i = 0; i < 25; i += 1) broker.pushNotice(notice(`c${i}`));
+  assert.equal(broker.pendingNotices.length, 20);
+  assert.equal(broker.pendingNotices[0].commentId, "c24");
+});
+
+test("dismissNotice removes only the matching notice", () => {
+  const broker = new Broker();
+  broker.pushNotice(notice("c1"));
+  broker.pushNotice(notice("c2"));
+  broker.dismissNotice("c1");
+  assert.deepEqual(
+    broker.pendingNotices.map((n) => n.commentId),
+    ["c2"],
+  );
+});
+
+test("pendingNotices hands out a copy, not the live array", () => {
+  const broker = new Broker();
+  broker.pushNotice(notice("c1"));
+  broker.pendingNotices.pop();
+  assert.equal(broker.pendingNotices.length, 1);
 });

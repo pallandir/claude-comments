@@ -1,7 +1,6 @@
-export const OWNERSHIP_TTL_MS = 300_000;
-export const SESSION_ALIVE_TTL_MS = 45_000;
-export const POLL_HEARTBEAT_TTL_MS = 35_000;
-export const EXTENSION_ALIVE_TTL_MS = 90_000;
-export const HTTP_WAIT_TIMEOUT_MS = 25_000;
-export const MCP_MAX_WAIT_MS = 20_000;
-export const VERSION = "1.0.0";
+export const READY_POLL_MS = 250;
+export const READY_TIMEOUT_MS = 10_000;
+export const SUBMIT_DELAY_MS = 200;
+export const EXEC_TIMEOUT_MS = 5_000;
+export const COALESCE_MS = 3_000;
+export const VERSION = "2.0.0";

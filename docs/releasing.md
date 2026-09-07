@@ -60,32 +60,45 @@ and nothing from `src/` or `tests/`. The `prepack`
 step copies `LICENSE.md` into the package from the repo root, so it is present in
 both CI and a local pack even though the file is gitignored.
 
-## Packaging the extension for the store
+## Packaging the extension for the stores
 
-The extension is submitted as a zip with the manifest at the zip root, which
-works for both the Chrome Web Store and Firefox AMO.
+Chrome and Firefox get different builds, because Gecko has no extension service
+worker and needs its own `browser_specific_settings`. Each is a zip with the
+manifest at the zip root.
 
-1. Build and package in one step:
+1. Build and package both:
 
    ```sh
    npm run package --workspace @northstar/extension
+   npm run package:firefox --workspace @northstar/extension
    ```
 
-   This produces `extension/northstar-extension.zip`.
+   This produces `extension/northstar-chrome.zip` and
+   `extension/northstar-firefox.zip`.
 
-2. Verify the zip is a coherent build before you upload it:
+2. Verify each zip is a coherent build before you upload it:
 
    ```sh
-   unzip -l extension/northstar-extension.zip
+   unzip -l extension/northstar-chrome.zip
+   unzip -l extension/northstar-firefox.zip
    ```
 
-   Confirm it contains `manifest.json` at the root, all four icons, the service
-   worker loader, the popup html and its js and css, the content-script chunk,
-   and the transport chunk, and that the asset hashes referenced in the manifest
-   match files actually in the zip. Always re-run the package step after any code
-   change so the zip and the manifest come from the same build.
+   Confirm each contains `manifest.json` at the root, all four icons, the
+   background loader, the popup html and its js and css, the content-script
+   chunk, and the transport chunk, and that the asset hashes referenced in the
+   manifest match files actually in the zip. Always re-run the package step after
+   any code change so the zip and the manifest come from the same build.
 
-3. Submit using the listing copy in [extension/STORE.md](../extension/STORE.md):
+3. Run the AMO validator against the Firefox build:
+
+   ```sh
+   npm run lint:firefox --workspace @northstar/extension
+   ```
+
+   It must report zero errors. One `UNSAFE_VAR_ASSIGNMENT` warning is expected:
+   the Handoff export writes DOMPurify-sanitized HTML.
+
+4. Submit using the listing copy in [extension/STORE.md](../extension/STORE.md):
    the description, the permission justifications, the data-use disclosures, and
    the privacy-policy URL. Make sure the repo is public so the privacy-policy URL
    resolves.
@@ -96,5 +109,6 @@ works for both the Chrome Web Store and Firefox AMO.
 - [ ] CHANGELOG updated for the release.
 - [ ] `npm run lint`, typecheck, and tests pass.
 - [ ] `npm pack --dry-run` tarball looks right.
-- [ ] Extension zip rebuilt and verified with `unzip -l`.
-- [ ] Tag pushed (npm), zip uploaded (store).
+- [ ] Both extension zips rebuilt and verified with `unzip -l`.
+- [ ] `web-ext lint` clean on the Firefox build.
+- [ ] Tag pushed (npm), zips uploaded (Chrome Web Store and AMO).

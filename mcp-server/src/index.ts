@@ -3,6 +3,7 @@ import { Broker } from "./broker.js";
 import { startIngestServer } from "./http.js";
 import { createMcpServer } from "./server.js";
 import { CommentStore } from "./store.js";
+import { TerminalHandoff } from "./terminal/index.js";
 
 const DEFAULT_PORTS = [7474, 7475, 7476];
 
@@ -18,11 +19,18 @@ async function main(): Promise<void> {
   const store = new CommentStore(root);
   const broker = new Broker();
 
-  // stdout is reserved for the MCP protocol; all logs go to stderr.
   const log = (msg: string) => process.stderr.write(`[northstar] ${msg}\n`);
+  const handoff = new TerminalHandoff(log);
 
-  const ingest = await startIngestServer(store, parsePorts(), log, broker);
+  const ingest = await startIngestServer(store, parsePorts(), log, broker, handoff);
   log(`ingest listening on http://127.0.0.1:${ingest.port}, store root ${root}`);
+
+  const terminal = await handoff.describe();
+  log(
+    terminal.available
+      ? `terminal handoff via ${terminal.driver}`
+      : `no handoff: ${terminal.reason}`,
+  );
 
   const server = createMcpServer(store, broker);
   const transport = new StdioServerTransport();
@@ -31,21 +39,9 @@ async function main(): Promise<void> {
   const shutdown = async () => {
     if (closing) return;
     closing = true;
-    clearInterval(parentWatch);
-    broker.unbindSession();
     await ingest.close();
     process.exit(0);
   };
-
-  // Claude Code spawns this server in its own process group, so a Ctrl+C in the
-  // TUI never reaches us as a signal and does not always close stdin. When the
-  // editor exits, the OS reparents us (ppid changes, becomes 1 on unix): detect
-  // that and release the binding, matching the clean-exit path.
-  const parentPid = process.ppid;
-  const parentWatch = setInterval(() => {
-    if (process.ppid !== parentPid) void shutdown();
-  }, 2000);
-  parentWatch.unref();
 
   transport.onclose = () => void shutdown();
   process.stdin.on("end", () => void shutdown());

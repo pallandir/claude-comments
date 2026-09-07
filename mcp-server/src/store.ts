@@ -6,12 +6,8 @@ import type {
   CommentStatus,
   DeferredComment,
   IncomingComment,
-  IncomingRatingRequest,
   Operation,
   OperationType,
-  RatingRequest,
-  RatingResult,
-  RatingStatus,
 } from "./types.js";
 
 // Confine a source location's path to the project root so a crafted page cannot
@@ -32,7 +28,6 @@ const STORE_FILE = join(STORE_DIR, "design-comments.md");
 const STORE_JSON = join(STORE_DIR, "design-comments.json");
 const SHOTS_DIR = join(STORE_DIR, "design-shots");
 const DEFERRED_FILE = join(STORE_DIR, "northstar-deferred.md");
-const RATINGS_FILE = join(STORE_DIR, "northstar-ratings.json");
 
 export class CommentStore {
   private readonly storeRoot: string;
@@ -40,7 +35,6 @@ export class CommentStore {
   private readonly storeJsonPath: string;
   private readonly shotsPath: string;
   private readonly deferredPath: string;
-  private readonly ratingsPath: string;
   private readonly storeDir: string;
   private writeQueue: Promise<void> = Promise.resolve();
   private storeDirInitialized = false;
@@ -52,7 +46,6 @@ export class CommentStore {
     this.storeJsonPath = join(root, STORE_JSON);
     this.shotsPath = join(root, SHOTS_DIR);
     this.deferredPath = join(root, DEFERRED_FILE);
-    this.ratingsPath = join(root, RATINGS_FILE);
   }
 
   get root(): string {
@@ -102,7 +95,6 @@ export class CommentStore {
       status: "open",
       source: safeSource,
       screenshot,
-      sessionId: incoming.sessionId,
       planFirst: incoming.planFirst ?? false,
     };
     return this.enqueue(async () => {
@@ -185,69 +177,6 @@ export class CommentStore {
     });
   }
 
-  async addRatingRequest(incoming: IncomingRatingRequest): Promise<RatingRequest> {
-    const id = `r-${randomUUID().slice(0, 8)}`;
-    const screenshot = incoming.screenshotDataUrl
-      ? await this.saveShot(id, incoming.screenshotDataUrl)
-      : null;
-    const entry: RatingRequest = {
-      id,
-      createdAt: new Date().toISOString(),
-      url: incoming.url,
-      screenshot,
-      sessionId: incoming.sessionId,
-      status: "pending",
-    };
-    return this.enqueue(async () => {
-      const ratings = await this.readRatings();
-      ratings.push(entry);
-      await this.writeRatings(ratings);
-      return entry;
-    });
-  }
-
-  async listRatingRequests(status?: RatingStatus): Promise<RatingRequest[]> {
-    const all = await this.readRatings();
-    return status ? all.filter((r) => r.status === status) : all;
-  }
-
-  async getRatingRequest(id: string): Promise<RatingRequest | undefined> {
-    return (await this.readRatings()).find((r) => r.id === id);
-  }
-
-  async setRatingScore(id: string, result: RatingResult): Promise<RatingRequest | undefined> {
-    return this.enqueue(async () => {
-      const ratings = await this.readRatings();
-      const entry = ratings.find((r) => r.id === id);
-      if (!entry) return undefined;
-      entry.status = "scored";
-      entry.result = result;
-      await this.writeRatings(ratings);
-      return entry;
-    });
-  }
-
-  async latestScoredRatingForUrl(url: string): Promise<RatingRequest | undefined> {
-    const all = await this.readRatings();
-    return all
-      .filter((r) => r.url === url && r.status === "scored")
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  }
-
-  private async readRatings(): Promise<RatingRequest[]> {
-    const raw = await readTextFile(this.ratingsPath);
-    if (!raw) return [];
-    try {
-      return JSON.parse(raw) as RatingRequest[];
-    } catch {
-      return [];
-    }
-  }
-
-  private async writeRatings(ratings: RatingRequest[]): Promise<void> {
-    await writeFileAtomic(this.ratingsPath, JSON.stringify(ratings, null, 2));
-  }
-
   private enqueue<T>(fn: () => Promise<T>): Promise<T> {
     const result = this.writeQueue.then(fn);
     this.writeQueue = result.then(
@@ -323,7 +252,6 @@ function serialize(comments: Comment[]): string {
       );
     }
     if (c.planFirst) lines.push("- planfirst: true");
-    if (c.sessionId) lines.push(`- session: ${c.sessionId}`);
     lines.push(
       `- operator: ${c.operator}`,
       `- elementtext: ${JSON.stringify(c.metadata.elementText)}`,
@@ -383,7 +311,6 @@ function parse(raw: string): Comment[] {
         : null,
       screenshot: current.screenshot ?? null,
       planFirst: kv.planfirst === "true",
-      sessionId: kv.session,
     });
   };
 

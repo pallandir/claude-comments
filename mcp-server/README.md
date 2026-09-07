@@ -26,31 +26,35 @@ claude mcp add northstar -- npx -y @pallandir/northstar
 
 ## Tools
 
-The server exposes 11 tools. `list_comments` returns full per-comment detail, so
+The server exposes 6 tools. `list_comments` returns full per-comment detail, so
 there is no separate per-comment fetch.
 
 | Tool | Purpose |
 | --- | --- |
-| `bind_session(sessionId)` | Claim ownership of comment processing for this watch session. |
-| `unbind_session()` | Release ownership so another session can take over. |
-| `wait_for_update(sinceVersion?, timeoutMs?)` | Long-poll until the store changes; heartbeats the session binding. |
 | `list_comments(status?)` | List comments with full detail, optionally filtered by `open` / `resolved` / `wontfix`. |
-| `defer_comment(id, reason, ...)` | Park a comment (`needs-plan` or `feedback`) and notify the toolbar. |
-| `list_deferred()` | List deferred comments with their category and reason. |
 | `resolve_comment(id, status)` | Set a single comment to `open` / `resolved` / `wontfix`. |
 | `resolve_comments(resolutions[])` | Resolve or wontfix many comments in one call. |
-| `list_rating_requests(status?)` | List `pending` or `scored` page rating requests. |
-| `submit_rating(id, score, ui, ux, coherence, notes, sections)` | Submit a purpose-fit UI/UX score for a rating request. |
+| `defer_comment(id, reason, ...)` | Park a comment (`needs-plan` or `feedback`) and notify the toolbar. |
+| `list_deferred()` | List deferred comments with their category and reason. |
 | `clear_resolved()` | Remove every comment that is not open. |
+
+There is no tool to start the work. When the developer clicks **Send to AI**, the
+server types a one-line request into the terminal this process was launched from.
 
 ## HTTP endpoints (for the extension)
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Port discovery probe; returns `{ ok, service: "northstar" }` so the extension only trusts a Northstar server. |
+| `GET` | `/health` | Port discovery probe; returns `{ ok, service: "northstar", root, terminal }`. |
+| `GET` | `/state` | Version, stored comments, deferral notices, and terminal availability. |
 | `GET` | `/comments` | List stored comments (lets the extension show synced pins). |
-| `POST` | `/comments` | Ingest a new comment from the extension. |
-| `DELETE` | `/comments?url=<page>` | Delete stored comments for a page (omit `url` to clear all). |
+| `POST` | `/comments` | Ingest a batch of comments, then announce it in the terminal. Returns `{ ids, typed, reason? }`. |
+| `POST` | `/comments/reopen` | Reopen a resolved comment with an optional note. |
+| `POST` | `/notices/dismiss` | Clear a deferral notice from the toolbar. |
+| `DELETE` | `/comments?url=<page>` | Delete stored comments for a page (omit `url` for `?all=true`). |
+
+Every route is loopback-only and rejects any `Origin` that is not a browser
+extension. There is no bearer token; see [SECURITY.md](../SECURITY.md).
 
 ## Env
 
@@ -58,6 +62,8 @@ there is no separate per-comment fetch.
 | --- | --- | --- |
 | `NORTHSTAR_PORT` | 7474 | Preferred ingest port (falls back to 7475/7476). |
 | `NORTHSTAR_ROOT` | `process.cwd()` | Where the store is written. |
+| `NORTHSTAR_TERMINAL` | detected | Force a driver: `tmux`, `iterm`, `terminal-app`, or `none`. |
+| `NORTHSTAR_INJECT` | `1` | Set to `0` to never type into the terminal. |
 
 ## Develop
 

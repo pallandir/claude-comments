@@ -33,7 +33,6 @@ export interface Comment {
   status: CommentStatus;
   source: SourceLocation | null;
   screenshot: string | null;
-  sessionId?: string;
   planFirst?: boolean;
 }
 
@@ -63,40 +62,5 @@ export interface IncomingComment {
   metadata: CommentMetadata;
   source?: SourceLocation | null;
   screenshotDataUrl?: string | null;
-  sessionId?: string;
   planFirst?: boolean;
-}
-
-export type RatingStatus = "pending" | "scored";
-
-export interface RatingSection {
-  key: "typography" | "composition" | "motion" | "color" | "details";
-  label: string;
-  score: number;
-  advice: string;
-}
-
-export interface RatingResult {
-  score: number;
-  ui: number;
-  ux: number;
-  coherence: number;
-  notes: string;
-  sections: RatingSection[];
-}
-
-export interface IncomingRatingRequest {
-  url: string;
-  screenshotDataUrl?: string | null;
-  sessionId?: string;
-}
-
-export interface RatingRequest {
-  id: string;
-  createdAt: string;
-  url: string;
-  screenshot: string | null;
-  sessionId?: string;
-  status: RatingStatus;
-  result?: RatingResult;
 }

@@ -1,8 +1,9 @@
+import { browser } from "../lib/browser.js";
 import { captureElement } from "../lib/fingerprint.js";
 import { resolveSource } from "../lib/source-map.js";
 import { isLocalUrl } from "../lib/transport.js";
 import { resolveXPath } from "../lib/xpath.js";
-import type { Message, PageRating, PinModel, QueueStatus, Response } from "../messages.js";
+import type { Message, PinModel, QueueStatus, Response, SendOutcome } from "../messages.js";
 import type { DraftRequest, Operation, Rect } from "../types.js";
 import { Drawer, type DrawerContext } from "./drawer.js";
 import { downloadHandoff } from "./handoff.js";
@@ -35,8 +36,7 @@ interface ContentState {
   drawerOpen: boolean;
   lastPins: PinModel[];
   lastStatus: QueueStatus | null;
-  lastRating: PageRating | null;
-  lastWatching: boolean;
+  lastSend: SendOutcome | null;
   pollTimer: number | null;
 }
 
@@ -48,8 +48,7 @@ function init(): void {
     drawerOpen: false,
     lastPins: [],
     lastStatus: null,
-    lastRating: null,
-    lastWatching: false,
+    lastSend: null,
     pollTimer: null,
   };
   const mode = pageMode();
@@ -60,13 +59,13 @@ function init(): void {
 
   async function send(message: Message): Promise<Response> {
     try {
-      return await chrome.runtime.sendMessage(message);
+      return await browser.runtime.sendMessage(message);
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }
   }
 
-  chrome.runtime.onMessage.addListener((message: Message) => {
+  browser.runtime.onMessage.addListener((message: Message) => {
     if (message.type === "set-active") setActive(message.on);
   });
 
@@ -88,12 +87,11 @@ function init(): void {
         onTogglePick: () => setPicking(!st.picking),
       });
       drawer = new Drawer(surface, {
-        onEdit: (cid, text) => void editComment(cid, text),
+        onEdit: (cid, text, opts) => void editComment(cid, text, opts),
         onRemove: (key) => void removePin(key),
         onClose: toggleDrawer,
         onRevert: (key) => void handleRevert(key),
         onHoverComment: (key) => surface.focusPin(key),
-        onReRequestRating: () => void publishPageRating(),
       });
       void refresh();
       startPolling();
@@ -241,11 +239,7 @@ function init(): void {
   }
 
   function drawerCtx(): DrawerContext {
-    return {
-      mode,
-      connected: Boolean(st.lastStatus?.serverReachable) && Boolean(st.lastStatus?.watching),
-      watching: Boolean(st.lastStatus?.watching),
-    };
+    return { mode, connected: Boolean(st.lastStatus?.serverReachable) };
   }
 
   interface RecordPayload {
@@ -297,15 +291,6 @@ function init(): void {
     return shot;
   }
 
-  async function publishPageRating(): Promise<void> {
-    const rect: Rect = { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
-    const screenshot = await captureHidden(rect);
-    await send({ type: "request-rating", url: location.href, screenshotDataUrl: screenshot });
-    st.lastRating = { id: "pending", status: "pending" };
-    drawer?.setRating(st.lastRating);
-    await refresh();
-  }
-
   async function handleDismissNotice(commentId: string): Promise<void> {
     await send({ type: "dismiss-notice", commentId });
     await refresh();
@@ -331,8 +316,10 @@ function init(): void {
   }
 
   async function handleSend(): Promise<void> {
-    if (!st.lastStatus?.watching) return;
-    await send({ type: "flush" });
+    if (!st.lastStatus?.serverReachable) return;
+    const res = await send({ type: "flush" });
+    st.lastSend = res.ok ? (res.send ?? null) : null;
+    if (st.lastSend) toolbar?.flashSent(st.lastSend);
     await refresh();
   }
 
@@ -403,14 +390,6 @@ function init(): void {
     ]);
     st.lastPins = pinsRes.ok && pinsRes.pins ? pinsRes.pins : [];
     st.lastStatus = statusRes.ok ? (statusRes.status ?? null) : null;
-    const newRating = statusRes.ok ? (statusRes.status?.rating ?? null) : null;
-    if (newRating !== null) {
-      st.lastRating = newRating;
-      drawer?.setRating(st.lastRating);
-    }
-    const nowWatching = Boolean(st.lastStatus?.watching);
-    if (nowWatching && !st.lastWatching && !st.lastRating) void publishPageRating();
-    st.lastWatching = nowWatching;
     surface.setPins(
       st.lastPins,
       (key) => void removePin(key),
@@ -452,7 +431,7 @@ function init(): void {
       count: activeCount,
       status: st.lastStatus,
       drawerOpen: st.drawerOpen,
-      sessionId: st.lastStatus?.sessionId ?? null,
+      lastSend: st.lastSend,
       picking: st.picking,
     });
     drawer?.render(st.lastPins, drawerCtx());
@@ -477,16 +456,11 @@ function statusChanged(a: QueueStatus | null, b: QueueStatus | null): boolean {
     a.serverReachable !== b.serverReachable ||
     a.port !== b.port ||
     a.queued !== b.queued ||
-    a.watching !== b.watching ||
     a.root !== b.root ||
     a.version !== b.version ||
-    noticesKey(a.notices) !== noticesKey(b.notices) ||
-    ratingKey(a.rating) !== ratingKey(b.rating)
+    a.terminal?.available !== b.terminal?.available ||
+    noticesKey(a.notices) !== noticesKey(b.notices)
   );
-}
-
-function ratingKey(r: QueueStatus["rating"]): string {
-  return `${r?.id ?? ""}:${r?.status ?? ""}:${r?.result?.score ?? ""}`;
 }
 
 function noticesKey(notices: QueueStatus["notices"]): string {

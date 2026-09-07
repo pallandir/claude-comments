@@ -83,7 +83,7 @@ export function openTextEditor(
   commit: (from: string, to: string) => void,
   cancel: () => void,
 ): void {
-  const originalHtml = el.innerHTML;
+  const originalNodes = Array.from(el.childNodes).map((node) => node.cloneNode(true));
   const originalText = el.textContent ?? "";
   const from = originalText.trim();
   const isLeaf = el.children.length === 0;
@@ -99,6 +99,7 @@ export function openTextEditor(
   selectAll(el);
 
   let done = false;
+  const restore = () => el.replaceChildren(...originalNodes.map((node) => node.cloneNode(true)));
   const cleanup = () => {
     el.removeEventListener("keydown", onKey);
     el.removeEventListener("blur", onBlur);
@@ -112,10 +113,10 @@ export function openTextEditor(
     cleanup();
     const to = (el.textContent ?? "").trim();
     if (saveIt && to && to !== from) {
-      if (!isLeaf) el.innerHTML = originalHtml;
+      if (!isLeaf) restore();
       commit(from, to);
     } else {
-      el.innerHTML = originalHtml;
+      restore();
       cancel();
     }
   };
